@@ -46,5 +46,37 @@
     "password": "123",
     "role": "user",
     "status": "active"
+  },
+  {
+    "id": 7,
+    "name": "lina",
+    "email": "nisa@gmail.com",
+    "password": "123",
+    "role": "user",
+    "status": "active"
+  },
+  {
+    "id": 8,
+    "name": "lina",
+    "email": "nisa@gmail.com",
+    "password": "123",
+    "role": "user",
+    "status": "active"
+  },
+  {
+    "id": 9,
+    "name": "lina",
+    "email": "nisa@gmail.com",
+    "password": "123",
+    "role": "user",
+    "status": "active"
+  },
+   {
+    "id": 10,
+    "name": "linaa",
+    "email": "nisa@gmail.com",
+    "password": "123",
+    "role": "user",
+    "status": "active"
   }
 ]

@@ -137,51 +137,42 @@ export default function ProductsPage() {
    * - Automatically determines stock-based availability status
    */
   const fetchProducts = async () => {
-    setLoading(true);
-    setPage(1);
-    const startTime = Date.now();
-    try {
-      // Build query parameters from filters
-      const params = new URLSearchParams();
-      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
-      if (categoryFilter) params.append("category", categoryFilter);
-      if (priceRange.min) params.append("minPrice", priceRange.min);
-      if (priceRange.max) params.append("maxPrice", priceRange.max);
+  setLoading(true);
+  const startTime = Date.now();
 
-      // Fetch data from API
-      const response = await fetch(`/api/products/search?${params.toString()}`);
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
+  try {
+    const params = new URLSearchParams();
+    if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
+    if (categoryFilter) params.append("category", categoryFilter);
+    if (priceRange.min) params.append("minPrice", priceRange.min);
+    if (priceRange.max) params.append("maxPrice", priceRange.max);
 
-      const data = await response.json();
+    const response = await fetch(`/api/products/search?${params.toString()}`);
+    if (!response.ok)
+      throw new Error(`HTTP error! status: ${response.status}`);
 
-      // Format and validate product data
-      const allProducts = (data.data || []).map((product: any) => ({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        category: product.category || "General",
-        stock: product.stock || 0,
-        // Auto-determine status based on stock level
-        status: (product.stock || 0) > 0 ? "Available" : "Out of Stock",
-      }));
+    const data = await response.json();
 
-      setTotal(allProducts.length);
-      setProducts(allProducts);
+    const allProducts = (data.data || []).map((product: any) => ({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      category: product.category || "General",
+      stock: product.stock || 0,
+      status: (product.stock || 0) > 0 ? "Available" : "Out of Stock",
+    }));
 
-      // Ensure minimum loading time for smooth visual feedback
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime < 800) {
-        await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime));
-      }
-    } catch (error) {
-      logger.error("Failed to fetch products", "PRODUCTS", error);
-      setProducts([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setProducts(allProducts);
+    setTotal(allProducts.length);
+  } catch (error) {
+    logger.error("Failed to fetch products", "PRODUCTS", error);
+    setProducts([]);
+    setTotal(0);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ============================================
   // COMPUTED VALUES (Memoized)
@@ -416,7 +407,9 @@ export default function ProductsPage() {
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-sans font-bold tracking-tight">Products</h1>
+          <h1 className="text-3xl font-sans font-bold tracking-tight">
+            Products
+          </h1>
           <p className="text-muted-foreground mt-2">
             View and manage your product inventory.
           </p>
@@ -597,9 +590,8 @@ export default function ProductsPage() {
               Showing {start}–{end} of {total}
             </div>
 
-            {/* Navigation and Options */}
+            {/* Navigation */}
             <div className="flex items-center gap-2">
-              {/* Previous Page Button */}
               <Button
                 variant="outline"
                 size="sm"
@@ -609,27 +601,24 @@ export default function ProductsPage() {
                 Prev
               </Button>
 
-              {/* Current Page Indicator */}
               <div className="px-3 text-sm">
                 Page {page} of {totalPages}
               </div>
 
-              {/* Next Page Button */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
+                disabled={page === totalPages}
               >
                 Next
               </Button>
 
-              {/* Items Per Page Selector */}
               <select
                 value={perPage}
                 onChange={(e) => {
                   setPerPage(Number(e.target.value));
-                  setPage(1); // Reset to page 1 when changing items per page
+                  setPage(1); // reset page
                 }}
                 className="ml-2 rounded border bg-background px-2 py-1 text-sm"
               >

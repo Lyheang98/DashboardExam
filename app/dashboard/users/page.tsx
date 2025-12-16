@@ -2,14 +2,14 @@
 
 /**
  * Users Management Page
- * 
+ *
  * This page provides a comprehensive user management interface with:
  * - Real-time search and filtering capabilities
  * - Pagination support for large datasets
  * - CRUD operations (Create, Read, Update, Delete)
  * - Interactive status toggle with visual feedback
  * - Performance optimizations for smooth scaling
- * 
+ *
  * Performance Features:
  * - Search debouncing (500ms) to reduce API calls
  * - useCallback hooks to prevent unnecessary re-renders
@@ -80,11 +80,11 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState("");
   /** Selected status filter value */
   const [statusFilter, setStatusFilter] = useState("");
-  
+
   // ============================================
   // PERFORMANCE OPTIMIZATION: Search Debouncing
   // ============================================
-  
+
   /**
    * Ref to store the debounce timeout ID
    * Prevents excessive API calls while user is typing
@@ -105,7 +105,7 @@ export default function UsersPage() {
     searchTimeoutRef.current = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 500);
-    
+
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -135,8 +135,8 @@ export default function UsersPage() {
    */
   const fetchUsers = async () => {
     setLoading(true);
-    setPage(1);
     const startTime = Date.now();
+
     try {
       // Build query parameters
       const params = new URLSearchParams();
@@ -144,14 +144,13 @@ export default function UsersPage() {
       if (roleFilter) params.append("role", roleFilter);
       if (statusFilter) params.append("status", statusFilter);
 
-      // Fetch data from API
       const response = await fetch(`/api/users/search?${params.toString()}`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+
       const data = await response.json();
 
-      // Format and validate user data
-      const formattedUsers = (data.data || []).map((user: any) => ({
+      const allUsers = (data.data || []).map((user: any) => ({
         id: user.id,
         name: user.name,
         email: user.email,
@@ -159,14 +158,8 @@ export default function UsersPage() {
         status: user.status || "active",
       }));
 
-      setTotal(data.count || formattedUsers.length);
-      setUsers(formattedUsers);
-      
-      // Ensure minimum loading time for smooth visual feedback
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime < 800) {
-        await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
-      }
+      setUsers(allUsers);
+      setTotal(allUsers.length);
     } catch (error) {
       logger.error("Failed to fetch users", "USERS", error);
       setUsers([]);
@@ -193,19 +186,28 @@ export default function UsersPage() {
    * Total number of pages available
    * Recalculated only when total or perPage changes
    */
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / perPage)), [total, perPage]);
-  
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(total / perPage)),
+    [total, perPage]
+  );
+
   /**
    * First item number being displayed on current page
    * Example: Page 2 with 10 items = 11
    */
-  const start = useMemo(() => (total === 0 ? 0 : (page - 1) * perPage + 1), [total, page, perPage]);
-  
+  const start = useMemo(
+    () => (total === 0 ? 0 : (page - 1) * perPage + 1),
+    [total, page, perPage]
+  );
+
   /**
    * Last item number being displayed on current page
    * Example: Page 2 with 10 items = 20
    */
-  const end = useMemo(() => Math.min(page * perPage, total), [page, perPage, total]);
+  const end = useMemo(
+    () => Math.min(page * perPage, total),
+    [page, perPage, total]
+  );
 
   // ============================================
   // CRUD DIALOG STATE
@@ -216,7 +218,12 @@ export default function UsersPage() {
   /** User being edited (null if creating new) */
   const [editing, setEditing] = useState<User | null>(null);
   /** Form data for create/edit operations */
-  const [form, setForm] = useState({ name: "", email: "", role: "User", status: "Active" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    role: "User",
+    status: "Active",
+  });
 
   // ============================================
   // CRUD OPERATIONS (Memoized Callbacks)
@@ -239,7 +246,12 @@ export default function UsersPage() {
    */
   const openEdit = useCallback((user: User) => {
     setEditing(user);
-    setForm({ name: user.name, email: user.email, role: user.role, status: user.status });
+    setForm({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    });
     setOpen(true);
   }, []);
 
@@ -252,7 +264,9 @@ export default function UsersPage() {
   const submitForm = useCallback(() => {
     if (editing) {
       // Update existing user
-      setUsers((prev) => prev.map((u) => (u.id === editing.id ? { ...u, ...form } : u)));
+      setUsers((prev) =>
+        prev.map((u) => (u.id === editing.id ? { ...u, ...form } : u))
+      );
     } else {
       // Create new user
       const newUser: User = { id: Date.now(), ...form };
@@ -267,10 +281,10 @@ export default function UsersPage() {
    * Memoized with users as dependency
    * @param {User} user - User to delete
    */
- const handleDelete = useCallback((user: User) => {
-  setUsers((prev) => prev.filter((u) => u.id !== user.id));
-  setTotal((t) => Math.max(0, t - 1));
-}, []);
+  const handleDelete = useCallback((user: User) => {
+    setUsers((prev) => prev.filter((u) => u.id !== user.id));
+    setTotal((t) => Math.max(0, t - 1));
+  }, []);
 
   /**
    * Toggles user status between active and inactive
@@ -278,7 +292,7 @@ export default function UsersPage() {
    * @param {User} user - User to toggle status
    */
   const toggleStatus = useCallback((user: User) => {
-    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    const newStatus = user.status === "active" ? "inactive" : "active";
     setUsers((prev) =>
       prev.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u))
     );
@@ -290,11 +304,15 @@ export default function UsersPage() {
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
       <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Search Input */}
           <div className="space-y-2">
-            <Label htmlFor="search" className="text-sm font-medium text-gray-700 dark:text-gray-300">Search by name or email</Label>
+            <Label
+              htmlFor="search"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Search by name or email
+            </Label>
             <Input
               id="search"
               placeholder="Type name or email..."
@@ -306,7 +324,12 @@ export default function UsersPage() {
 
           {/* Role Filter */}
           <div className="space-y-2">
-            <Label htmlFor="role-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Role</Label>
+            <Label
+              htmlFor="role-filter"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Filter by Role
+            </Label>
             <select
               id="role-filter"
               value={roleFilter}
@@ -322,7 +345,12 @@ export default function UsersPage() {
 
           {/* Status Filter */}
           <div className="space-y-2">
-            <Label htmlFor="status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Status</Label>
+            <Label
+              htmlFor="status-filter"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Filter by Status
+            </Label>
             <select
               id="status-filter"
               value={statusFilter}
@@ -353,8 +381,10 @@ export default function UsersPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? 'Edit User' : 'Add User'}</DialogTitle>
-              <DialogDescription>{editing ? 'Update user details' : 'Create a new user'}</DialogDescription>
+              <DialogTitle>{editing ? "Edit User" : "Add User"}</DialogTitle>
+              <DialogDescription>
+                {editing ? "Update user details" : "Create a new user"}
+              </DialogDescription>
             </DialogHeader>
 
             {/* Form Fields */}
@@ -362,13 +392,25 @@ export default function UsersPage() {
               {/* Name Field */}
               <div className="space-y-1">
                 <Label htmlFor="name">Name</Label>
-                <Input id="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                />
               </div>
 
               {/* Email Field */}
               <div className="space-y-1">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+                <Input
+                  id="email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                />
               </div>
 
               {/* Role and Status Fields */}
@@ -376,13 +418,26 @@ export default function UsersPage() {
                 {/* Role Field */}
                 <div className="space-y-1">
                   <Label htmlFor="role">Role</Label>
-                  <Input id="role" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} />
+                  <Input
+                    id="role"
+                    value={form.role}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, role: e.target.value }))
+                    }
+                  />
                 </div>
 
                 {/* Status Dropdown */}
                 <div className="space-y-1">
                   <Label htmlFor="status">Status</Label>
-                  <select id="status" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full rounded border px-2 py-1">
+                  <select
+                    id="status"
+                    value={form.status}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, status: e.target.value }))
+                    }
+                    className="w-full rounded border px-2 py-1"
+                  >
                     <option>Active</option>
                     <option>Inactive</option>
                   </select>
@@ -393,9 +448,13 @@ export default function UsersPage() {
             {/* Dialog Actions */}
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
               </DialogClose>
-              <Button onClick={submitForm}>{editing ? 'Save Changes' : 'Create User'}</Button>
+              <Button onClick={submitForm}>
+                {editing ? "Save Changes" : "Create User"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -411,14 +470,21 @@ export default function UsersPage() {
             <div className="mb-6">
               <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
             </div>
-            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Loading Users</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Please wait while we fetch your users...</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Loading Users
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Please wait while we fetch your users...
+            </p>
           </div>
 
           {/* Skeleton Loaders - Simulate table rows while loading */}
           <div className="space-y-3 mt-8">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-slate-800 rounded animate-pulse"></div>
+              <div
+                key={i}
+                className="h-12 bg-gray-100 dark:bg-slate-800 rounded animate-pulse"
+              ></div>
             ))}
           </div>
         </div>
@@ -471,9 +537,8 @@ export default function UsersPage() {
               Showing {start}–{end} of {total}
             </div>
 
-            {/* Navigation and Options */}
+            {/* Controls */}
             <div className="flex items-center gap-2">
-              {/* Previous Page Button */}
               <Button
                 variant="outline"
                 size="sm"
@@ -483,27 +548,24 @@ export default function UsersPage() {
                 Prev
               </Button>
 
-              {/* Current Page Indicator */}
               <div className="px-3 text-sm">
                 Page {page} of {totalPages}
               </div>
 
-              {/* Next Page Button */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
+                disabled={page === totalPages}
               >
                 Next
               </Button>
 
-              {/* Items Per Page Selector */}
               <select
                 value={perPage}
                 onChange={(e) => {
                   setPerPage(Number(e.target.value));
-                  setPage(1); // Reset to page 1 when changing items per page
+                  setPage(1); // important reset
                 }}
                 className="ml-2 rounded border bg-background px-2 py-1 text-sm"
               >
