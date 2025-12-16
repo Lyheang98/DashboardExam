@@ -2,14 +2,14 @@
 
 /**
  * Products Management Page
- * 
+ *
  * This page provides a comprehensive product inventory management interface with:
  * - Real-time product search and filtering by category and price
  * - Pagination support for large product catalogs
  * - CRUD operations (Create, Read, Update, Delete)
  * - Interactive status toggle with visual feedback (Available/Out of Stock)
  * - Performance optimizations for smooth scaling with large datasets
- * 
+ *
  * Performance Features:
  * - Search debouncing (500ms) to reduce API calls
  * - useCallback hooks to prevent unnecessary re-renders
@@ -82,11 +82,11 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   /** Price range filter with min and max values */
   const [priceRange, setPriceRange] = useState({ min: "", max: "" });
-  
+
   // ============================================
   // PERFORMANCE OPTIMIZATION: Search Debouncing
   // ============================================
-  
+
   /**
    * Ref to store the debounce timeout ID
    * Prevents excessive API calls while user is typing
@@ -107,7 +107,7 @@ export default function ProductsPage() {
     searchTimeoutRef.current = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 500);
-    
+
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -150,8 +150,9 @@ export default function ProductsPage() {
 
       // Fetch data from API
       const response = await fetch(`/api/products/search?${params.toString()}`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+
       const data = await response.json();
 
       // Format and validate product data
@@ -167,11 +168,11 @@ export default function ProductsPage() {
 
       setTotal(allProducts.length);
       setProducts(allProducts);
-      
+
       // Ensure minimum loading time for smooth visual feedback
       const elapsedTime = Date.now() - startTime;
       if (elapsedTime < 800) {
-        await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
+        await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime));
       }
     } catch (error) {
       logger.error("Failed to fetch products", "PRODUCTS", error);
@@ -199,19 +200,28 @@ export default function ProductsPage() {
    * Total number of pages available
    * Recalculated only when total or perPage changes
    */
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / perPage)), [total, perPage]);
-  
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(total / perPage)),
+    [total, perPage]
+  );
+
   /**
    * First product number being displayed on current page
    * Example: Page 2 with 10 items = 11
    */
-  const start = useMemo(() => (total === 0 ? 0 : (page - 1) * perPage + 1), [total, page, perPage]);
-  
+  const start = useMemo(
+    () => (total === 0 ? 0 : (page - 1) * perPage + 1),
+    [total, page, perPage]
+  );
+
   /**
    * Last product number being displayed on current page
    * Example: Page 2 with 10 items = 20
    */
-  const end = useMemo(() => Math.min(page * perPage, total), [page, perPage, total]);
+  const end = useMemo(
+    () => Math.min(page * perPage, total),
+    [page, perPage, total]
+  );
 
   // ============================================
   // CRUD DIALOG STATE
@@ -222,7 +232,13 @@ export default function ProductsPage() {
   /** Product being edited (null if creating new) */
   const [editing, setEditing] = useState<Product | null>(null);
   /** Form data for create/edit operations */
-  const [form, setForm] = useState({ name: "", price: 0, category: "", stock: 0, status: "Available" });
+  const [form, setForm] = useState({
+    name: "",
+    price: 0,
+    category: "",
+    stock: 0,
+    status: "Available",
+  });
 
   // ============================================
   // CRUD OPERATIONS (Memoized Callbacks)
@@ -234,7 +250,13 @@ export default function ProductsPage() {
    */
   const openCreate = useCallback(() => {
     setEditing(null);
-    setForm({ name: "", price: 0, category: "", stock: 0, status: "Available" });
+    setForm({
+      name: "",
+      price: 0,
+      category: "",
+      stock: 0,
+      status: "Available",
+    });
     setOpen(true);
   }, []);
 
@@ -245,7 +267,13 @@ export default function ProductsPage() {
    */
   const openEdit = useCallback((product: Product) => {
     setEditing(product);
-    setForm({ name: product.name, price: product.price, category: product.category, stock: product.stock, status: product.status });
+    setForm({
+      name: product.name,
+      price: product.price,
+      category: product.category,
+      stock: product.stock,
+      status: product.status,
+    });
     setOpen(true);
   }, []);
 
@@ -258,7 +286,9 @@ export default function ProductsPage() {
   const submitForm = useCallback(() => {
     if (editing) {
       // Update existing product
-      setProducts((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...form } : p)));
+      setProducts((prev) =>
+        prev.map((p) => (p.id === editing.id ? { ...p, ...form } : p))
+      );
     } else {
       // Create new product
       const newProduct: Product = { id: Date.now(), ...form };
@@ -274,10 +304,9 @@ export default function ProductsPage() {
    * @param {Product} product - Product to delete
    */
   const handleDelete = useCallback((product: Product) => {
-    if (confirm("Are you sure you want to delete this product?")) {
-      setProducts(products.filter((p) => p.id !== product.id));
-    }
-  }, [products]);
+    setProducts((prev) => prev.filter((u) => u.id !== product.id));
+    setTotal((t) => Math.max(0, t - 1));
+  }, []);
 
   /**
    * Toggles product status between Available and Out of Stock
@@ -285,7 +314,8 @@ export default function ProductsPage() {
    * @param {Product} product - Product to toggle status
    */
   const toggleStatus = useCallback((product: Product) => {
-    const newStatus = product.status === 'Available' ? 'Out of Stock' : 'Available';
+    const newStatus =
+      product.status === "Available" ? "Out of Stock" : "Available";
     setProducts((prev) =>
       prev.map((p) => (p.id === product.id ? { ...p, status: newStatus } : p))
     );
@@ -297,11 +327,15 @@ export default function ProductsPage() {
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
       <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Search & Filter</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Search Input */}
           <div className="space-y-2">
-            <Label htmlFor="search" className="text-sm font-medium text-gray-700 dark:text-gray-300">Search by product name</Label>
+            <Label
+              htmlFor="search"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Search by product name
+            </Label>
             <Input
               id="search"
               placeholder="Type product name..."
@@ -313,7 +347,12 @@ export default function ProductsPage() {
 
           {/* Category Filter */}
           <div className="space-y-2">
-            <Label htmlFor="category-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Category</Label>
+            <Label
+              htmlFor="category-filter"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Filter by Category
+            </Label>
             <select
               id="category-filter"
               value={categoryFilter}
@@ -332,26 +371,40 @@ export default function ProductsPage() {
 
           {/* Price Range - Min Filter */}
           <div className="space-y-2">
-            <Label htmlFor="price-min" className="text-sm font-medium text-gray-700 dark:text-gray-300">Min Price ($)</Label>
+            <Label
+              htmlFor="price-min"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Min Price ($)
+            </Label>
             <Input
               id="price-min"
               type="number"
               placeholder="0"
               value={priceRange.min}
-              onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
+              onChange={(e) =>
+                setPriceRange({ ...priceRange, min: e.target.value })
+              }
               className="w-full"
             />
           </div>
 
           {/* Price Range - Max Filter */}
           <div className="space-y-2">
-            <Label htmlFor="price-max" className="text-sm font-medium text-gray-700 dark:text-gray-300">Max Price ($)</Label>
+            <Label
+              htmlFor="price-max"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Max Price ($)
+            </Label>
             <Input
               id="price-max"
               type="number"
               placeholder="1000"
               value={priceRange.max}
-              onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
+              onChange={(e) =>
+                setPriceRange({ ...priceRange, max: e.target.value })
+              }
               className="w-full"
             />
           </div>
@@ -363,8 +416,10 @@ export default function ProductsPage() {
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-          <p className="text-muted-foreground mt-2">View and manage your product inventory.</p>
+          <h1 className="text-3xl font-sans font-bold tracking-tight">Products</h1>
+          <p className="text-muted-foreground mt-2">
+            View and manage your product inventory.
+          </p>
         </div>
 
         {/* Create Product Dialog */}
@@ -374,8 +429,12 @@ export default function ProductsPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? 'Edit Product' : 'Add Product'}</DialogTitle>
-              <DialogDescription>{editing ? 'Update product details' : 'Create a new product'}</DialogDescription>
+              <DialogTitle>
+                {editing ? "Edit Product" : "Add Product"}
+              </DialogTitle>
+              <DialogDescription>
+                {editing ? "Update product details" : "Create a new product"}
+              </DialogDescription>
             </DialogHeader>
 
             {/* Form Fields */}
@@ -383,7 +442,13 @@ export default function ProductsPage() {
               {/* Product Name Field */}
               <div className="space-y-1">
                 <Label htmlFor="name">Name</Label>
-                <Input id="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                />
               </div>
 
               {/* Price and Stock Fields */}
@@ -391,26 +456,53 @@ export default function ProductsPage() {
                 {/* Price Field */}
                 <div className="space-y-1">
                   <Label htmlFor="price">Price</Label>
-                  <Input id="price" type="number" value={String(form.price)} onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))} />
+                  <Input
+                    id="price"
+                    type="number"
+                    value={String(form.price)}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, price: Number(e.target.value) }))
+                    }
+                  />
                 </div>
 
                 {/* Stock Field */}
                 <div className="space-y-1">
                   <Label htmlFor="stock">Stock</Label>
-                  <Input id="stock" type="number" value={String(form.stock)} onChange={(e) => setForm((f) => ({ ...f, stock: Number(e.target.value) }))} />
+                  <Input
+                    id="stock"
+                    type="number"
+                    value={String(form.stock)}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, stock: Number(e.target.value) }))
+                    }
+                  />
                 </div>
               </div>
 
               {/* Category Field */}
               <div className="space-y-1">
                 <Label htmlFor="category">Category</Label>
-                <Input id="category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
+                <Input
+                  id="category"
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, category: e.target.value }))
+                  }
+                />
               </div>
 
               {/* Status Dropdown */}
               <div className="space-y-1">
                 <Label htmlFor="status">Status</Label>
-                <select id="status" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full rounded border px-2 py-1">
+                <select
+                  id="status"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, status: e.target.value }))
+                  }
+                  className="w-full rounded border px-2 py-1"
+                >
                   <option>Available</option>
                   <option>Out of Stock</option>
                 </select>
@@ -420,9 +512,13 @@ export default function ProductsPage() {
             {/* Dialog Actions */}
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
               </DialogClose>
-              <Button onClick={submitForm}>{editing ? 'Save Changes' : 'Create Product'}</Button>
+              <Button onClick={submitForm}>
+                {editing ? "Save Changes" : "Create Product"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -438,14 +534,21 @@ export default function ProductsPage() {
             <div className="mb-6">
               <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
             </div>
-            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Loading Products</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Please wait while we fetch your products...</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Loading Products
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Please wait while we fetch your products...
+            </p>
           </div>
 
           {/* Skeleton Loaders - Simulate table rows while loading */}
           <div className="space-y-3 mt-8">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-slate-800 rounded animate-pulse"></div>
+              <div
+                key={i}
+                className="h-12 bg-gray-100 dark:bg-slate-800 rounded animate-pulse"
+              ></div>
             ))}
           </div>
         </div>

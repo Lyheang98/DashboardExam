@@ -267,11 +267,10 @@ export default function UsersPage() {
    * Memoized with users as dependency
    * @param {User} user - User to delete
    */
-  const handleDelete = useCallback((user: User) => {
-    if (confirm("Are you sure you want to delete this user?")) {
-      setUsers(users.filter((u) => u.id !== user.id));
-    }
-  }, [users]);
+ const handleDelete = useCallback((user: User) => {
+  setUsers((prev) => prev.filter((u) => u.id !== user.id));
+  setTotal((t) => Math.max(0, t - 1));
+}, []);
 
   /**
    * Toggles user status between active and inactive
@@ -291,7 +290,7 @@ export default function UsersPage() {
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
       <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Search & Filter</h2>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Search Input */}
           <div className="space-y-2">
@@ -428,6 +427,16 @@ export default function UsersPage() {
           {/* Data Table - Displays paginated users */}
           <DataTable<User>
             columns={[
+              // === ADDED USER ID COLUMN ===
+              {
+                key: "id",
+                label: "ID",
+                render: (value) => (
+                  <span className="font-mono text-xs bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded">
+                    {value}
+                  </span>
+                ),
+              },
               { key: "name", label: "Name" },
               { key: "email", label: "Email" },
               { key: "role", label: "Role" },

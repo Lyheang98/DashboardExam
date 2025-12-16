@@ -1,5 +1,6 @@
-'use client';
+"use client";
 
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -7,15 +8,23 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { MoreHorizontal } from 'lucide-react';
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export interface DataTableColumn<T> {
   key: keyof T;
@@ -36,6 +45,29 @@ export function DataTable<T extends { id: string | number }>({
   onEdit,
   onDelete,
 }: DataTableProps<T>) {
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState<T | null>(null);
+
+  const handleDeleteClick = (row: T) => {
+    setRowToDelete(row);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (rowToDelete && onDelete) {
+      // IMPORTANT: Call the onDelete prop directly.
+      // Do NOT use window.confirm() here. The confirmation is already handled.
+      onDelete(rowToDelete);
+    }
+    setDeleteConfirmOpen(false);
+    setRowToDelete(null);
+  };
+  
+  const handleCancelDelete = () => {
+    setDeleteConfirmOpen(false);
+    setRowToDelete(null);
+  };
+
   return (
     <div className="border rounded-lg overflow-hidden">
       <Table>
@@ -85,7 +117,7 @@ export function DataTable<T extends { id: string | number }>({
                         )}
                         {onDelete && (
                           <DropdownMenuItem
-                            onClick={() => onDelete(row)}
+                            onClick={() => handleDeleteClick(row)}
                             className="text-destructive"
                           >
                             Delete
@@ -100,6 +132,27 @@ export function DataTable<T extends { id: string | number }>({
           )}
         </TableBody>
       </Table>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this item? This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelDelete}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

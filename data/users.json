@@ -24,19 +24,27 @@
     "status": "inactive"
   },
   {
+    "id":4,
     "name": "Lyheang",
     "email": "lyheang@gmail.com",
     "password": "1234",
     "role": "user",
-    "status": "active",
-    "id": 4
+    "status": "active"
   },
-  {
+  { 
+    "id":5,
     "name": "Liza",
     "email": "liza@gmail.com",
     "password": "12345",
     "role": "user",
-    "status": "active",
-    "id": 5
+    "status": "active"
+  },
+  {
+    "id": 6,
+    "name": "nisa",
+    "email": "nisa@gmail.com",
+    "password": "123",
+    "role": "user",
+    "status": "active"
   }
 ]
