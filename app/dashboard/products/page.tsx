@@ -137,42 +137,41 @@ export default function ProductsPage() {
    * - Automatically determines stock-based availability status
    */
   const fetchProducts = async () => {
-  setLoading(true);
-  const startTime = Date.now();
+    setLoading(true);
+    const startTime = Date.now();
 
-  try {
-    const params = new URLSearchParams();
-    if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
-    if (categoryFilter) params.append("category", categoryFilter);
-    if (priceRange.min) params.append("minPrice", priceRange.min);
-    if (priceRange.max) params.append("maxPrice", priceRange.max);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
+      if (categoryFilter) params.append("category", categoryFilter);
+      if (priceRange.min) params.append("minPrice", priceRange.min);
+      if (priceRange.max) params.append("maxPrice", priceRange.max);
 
-    const response = await fetch(`/api/products/search?${params.toString()}`);
-    if (!response.ok)
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await fetch(`/api/products/search?${params.toString()}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
 
-    const data = await response.json();
+      const data = await response.json();
 
-    const allProducts = (data.data || []).map((product: any) => ({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      category: product.category || "General",
-      stock: product.stock || 0,
-      status: (product.stock || 0) > 0 ? "Available" : "Out of Stock",
-    }));
+      const allProducts = (data.data || []).map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category || "General",
+        stock: product.stock || 0,
+        status: (product.stock || 0) > 0 ? "Available" : "Out of Stock",
+      }));
 
-    setProducts(allProducts);
-    setTotal(allProducts.length);
-  } catch (error) {
-    logger.error("Failed to fetch products", "PRODUCTS", error);
-    setProducts([]);
-    setTotal(0);
-  } finally {
-    setLoading(false);
-  }
-};
-
+      setProducts(allProducts);
+      setTotal(allProducts.length);
+    } catch (error) {
+      logger.error("Failed to fetch products", "PRODUCTS", error);
+      setProducts([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ============================================
   // COMPUTED VALUES (Memoized)
@@ -317,8 +316,20 @@ export default function ProductsPage() {
       {/* ============================================ */}
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="
+  bg-white dark:bg-slate-900
+  rounded-lg
+  border border-gray-200 dark:border-slate-700
+  p-6 shadow-sm
+  mt-6 sm:mt-4 lg:mt-3
+">
+        <div
+          className=" grid 
+    grid-cols-2
+    gap-3
+    sm:grid-cols-2
+    lg:grid-cols-4"
+        >
           {/* Search Input */}
           <div className="space-y-2">
             <Label

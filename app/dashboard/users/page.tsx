@@ -18,6 +18,13 @@
  */
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -303,7 +310,15 @@ export default function UsersPage() {
       {/* ============================================ */}
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
+      <div
+        className="
+  bg-white dark:bg-slate-900
+  rounded-lg
+  border border-gray-200 dark:border-slate-700
+  p-6 shadow-sm
+  mt-6 sm:mt-4 lg:mt-3
+"
+      >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Search Input */}
           <div className="space-y-2">
@@ -370,7 +385,7 @@ export default function UsersPage() {
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Users</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
           <p className="text-muted-foreground mt-2">Manage and view users.</p>
         </div>
 
@@ -379,7 +394,14 @@ export default function UsersPage() {
           <DialogTrigger asChild>
             <Button onClick={openCreate}>Add User</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent
+            className="
+    bg-card text-card-foreground
+    border border-border
+    rounded-xl
+    p-6
+  "
+          >
             <DialogHeader>
               <DialogTitle>{editing ? "Edit User" : "Add User"}</DialogTitle>
               <DialogDescription>
@@ -430,20 +452,37 @@ export default function UsersPage() {
                 {/* Status Dropdown */}
                 <div className="space-y-1">
                   <Label htmlFor="status">Status</Label>
-                  <select
-                    id="status"
+
+                  <Select
                     value={form.status}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, status: e.target.value }))
+                    onValueChange={(value) =>
+                      setForm((f) => ({ ...f, status: value }))
                     }
-                    className="w-full rounded border px-2 py-1"
                   >
-                    <option>Active</option>
-                    <option>Inactive</option>
-                  </select>
+                    <SelectTrigger className="w-full rounded-md border border-border bg-card text-card-foreground px-3 py-2 text-smfocus:outline-none focus:ring-2 focus:ring-ring">
+                      <SelectValue />
+                    </SelectTrigger>
+
+                    <SelectContent className="bg-card">
+                      <SelectItem
+                        value="Active"
+                        className="text-green-500 focus:text-green-500"
+                      >
+                        Active
+                      </SelectItem>
+
+                      <SelectItem
+                        value="Inactive"
+                        className="text-red-500 focus:text-red-500"
+                      >
+                        Inactive
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
+            {/* w-full rounded-md border border-border bg-card text-card-foreground px-3 py-2 text-smfocus:outline-none focus:ring-2 focus:ring-ring */}
 
             {/* Dialog Actions */}
             <DialogFooter>

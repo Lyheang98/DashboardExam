@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Users, Package, TrendingUp, DollarSign } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
 import { DataTable } from '@/components/dashboard/DataTable';
+import { ThemeToggle } from '@/components/dashboard/ThemeToggle';
 import { BarChart, LineChart } from '@/components/dashboard/Chart';
 
 export default function DashboardPage() {
@@ -72,15 +73,10 @@ export default function DashboardPage() {
   const productsChartData = useMemo(() => generateSeries(productsGran), [productsGran]);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Welcome back! Here's what's happening with your business today.
-        </p>
-      </div>
-
+    <div className="
+  p-2
+  mt-6 sm:mt-4 lg:mt-3
+">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -114,7 +110,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Users chart */}
-      <div>
+      <div className="mt-6 sm:mt-4 lg:mt-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold mb-4">Users</h2>
           <div className="space-x-2">

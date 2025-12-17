@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 // Dashboard Header Component
 // - Displays user name
@@ -7,17 +7,18 @@
 // - Settings and Logout buttons
 // - Sticky header with backdrop blur effect
 
-import { Menu, Bell, Settings, LogOut } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Menu, Bell, Settings, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/dashboard/ThemeToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useRouter } from 'next/navigation';
-import { clearToken, getUser } from '@/lib/auth';
-import { useEffect, useState } from 'react';
+} from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
+import { clearToken, getUser } from "@/lib/auth";
+import { useEffect, useState } from "react";
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -27,58 +28,78 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
 
-  // Load current user name from localStorage
   useEffect(() => {
     const u = getUser();
     setUserName(u?.name || null);
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-      <div className="flex h-16 items-center justify-between px-4 md:px-6">
-        <div className="flex items-center gap-2">
-          {/* Mobile menu toggle button */}
+    <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background">
+      <div className="flex h-20 items-center justify-between px-4 md:px-6">
+        {/* LEFT */}
+        <div className="flex items-center gap-3 flex-1">
+          {/* Mobile menu */}
           <Button
             variant="ghost"
             size="icon"
             onClick={onMenuToggle}
-            className="md:hidden"
+            className="md:hidden shrink-0"
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold">Dashboard</h1>
+
+          {/* Title */}
+          <div className="flex-1 min-w-0">
+            <h1 className="truncate text-base sm:text-xl md:text-2xl font-bold tracking-tight">
+              MoEYS EdTech Dashboard
+            </h1>
+            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">
+              Monitor and manage your educational platform
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* RIGHT */}
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 shrink-0">
+          {/* Notification */}
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
             <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
           </Button>
-          <div className="hidden sm:flex items-center gap-3">
-            {userName && <div className="text-sm">{userName}</div>}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Settings className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Preferences</DropdownMenuItem>
-                <DropdownMenuItem>Help</DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    clearToken();
-                    router.push('/login');
-                  }}
-                  className="text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div>
+             <ThemeToggle />
           </div>
+          
+
+          {/* User & Settings */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {userName && (
+                <>
+                  <div className="px-2 py-1 text-xs text-muted-foreground">
+                    Signed in as
+                  </div>
+                  <DropdownMenuItem disabled>{userName}</DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem>Help</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  clearToken();
+                  router.push("/login");
+                }}
+                className="text-destructive"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
