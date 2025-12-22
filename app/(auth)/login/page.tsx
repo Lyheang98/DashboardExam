@@ -238,7 +238,7 @@ export default function LoginPage() {
                     Ministry of Education, Youth and Sport
                   </p>
                   <p className="text-sm sm:text-sm lg:text-base xl:text-lg mt-1">
-                    MoEYS EdTech Platform
+                    MoEYS EdTech Dashboard
                   </p>
                 </div>
               </div>
