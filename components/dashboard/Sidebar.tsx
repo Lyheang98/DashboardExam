@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Package, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
+import { OptimizedImage } from "@/components/ui/optimized-image";
+import { IMAGE_PATHS, IMAGE_CONFIG } from "@/lib/images";
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -46,10 +47,34 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           {/* Sidebar Header */}
           <div className="flex h-20 items-center justify-center border-b px-4 mt-3">
             <div className="flex items-center gap-4">
-              <Image src="/images/MoEYS logo.png" alt="MoEYS" width={48} height={48} />
-              <Image src="/images/FOED logo.PNG" alt="FOED" width={36} height={36} />
-              <Image src="/images/world bank.png" alt="World Bank" width={48} height={48} />
-              <Image src="/images/IMG_5840.PNG" alt="Partner" width={38} height={40} />
+              <OptimizedImage
+                src={IMAGE_PATHS.logos.moeys}
+                alt="MoEYS Logo"
+                width={IMAGE_CONFIG.sizes.logo.width}
+                height={IMAGE_CONFIG.sizes.logo.height}
+                priority
+              />
+              <OptimizedImage
+                src={IMAGE_PATHS.logos.foed}
+                alt="FOED Logo"
+                width={IMAGE_CONFIG.sizes.logoSmall.width}
+                height={IMAGE_CONFIG.sizes.logoSmall.height}
+                priority
+              />
+              <OptimizedImage
+                src={IMAGE_PATHS.logos.worldBank}
+                alt="World Bank Logo"
+                width={IMAGE_CONFIG.sizes.logo.width}
+                height={IMAGE_CONFIG.sizes.logo.height}
+                priority
+              />
+              <OptimizedImage
+                src={IMAGE_PATHS.logos.partner}
+                alt="Partner Logo"
+                width={38}
+                height={40}
+                priority
+              />
             </div>
           </div>
 

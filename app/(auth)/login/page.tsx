@@ -16,6 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { setToken, setUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { useToast } from '@/components/ui/toast';
+import { OptimizedImage } from '@/components/ui/optimized-image';
+import { IMAGE_PATHS, IMAGE_CONFIG } from '@/lib/images';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -152,54 +154,119 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl ">Login</CardTitle>
-          <CardDescription>
-            Enter your credentials to access your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Username</Label>
-              <Input
-                id="email"
-                type="text"
-                placeholder="Enter username"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-              />
-            </div>
+    <div className="fixed inset-0 min-h-screen flex overflow-hidden">
+      {/* Background Image - Full Screen */}
+      <div className="fixed inset-0 z-0">
+        <OptimizedImage
+          src={IMAGE_PATHS.promotional.version2}
+          alt="MOEYS EDTECH Version 2.0 Background"
+          fill
+          sizes="100vw"
+          objectFit="cover"
+          priority
+          className="object-cover blur-[3px]"
+        />
+        {/* Dark overlay for better readability */}
+        <div className="absolute inset-0 bg-black/50" />
+        {/* Gradient overlay for better contrast */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
+      </div>
 
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </form>
-
-          <div className="text-center text-sm">
-            Don't have an account?{' '}
-            <Link href="/register" className="text-primary hover:underline font-medium">
-              Register here
-            </Link>
+      {/* Left Side - Copyright */}
+      <div className="hidden lg:flex lg:w-1/2 relative z-10 items-center justify-center p-4 sm:p-8">
+        <div className="w-full max-w-md">
+          {/* Copyright - Centered */}
+          <div className="space-y-4 text-center">
+            <div className="flex items-center gap-4 justify-center">
+              <OptimizedImage
+                src={IMAGE_PATHS.logos.moeys}
+                alt="MoEYS Logo"
+                width={60}
+                height={60}
+                className="opacity-90"
+              />
+              <div className="text-white/80">
+                <p className="font-semibold text-lg">Ministry of Education, Youth and Sport</p>
+                <p className="text-base">MoEYS EdTech Platform</p>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-white/20">
+              <p className="text-white/70 text-base">
+                Copyright © {new Date().getFullYear()} Ministry of Education, Youth and Sport (MoEYS)
+              </p>
+              <p className="text-white/60 text-sm mt-1">
+                All rights reserved. Powered by GEIP EdTech FOEDRUPP
+              </p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Right Side - Login Form */}
+      <div className="w-full lg:w-1/2 relative z-10 flex items-center justify-center p-4 sm:p-8">
+        <div className="w-full max-w-md">
+
+          {/* Login Card */}
+          <Card className="border-2 shadow-xl bg-card/95 backdrop-blur-sm">
+            <CardHeader className="space-y-2 text-center">
+              <CardTitle className="text-2xl font-bold">Login</CardTitle>
+              <CardDescription>
+                Enter your credentials to access your account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <form onSubmit={submit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium">
+                    Username
+                  </Label>
+                  <Input
+                    id="email"
+                    type="text"
+                    placeholder="Enter username"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-medium">
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+
+                <Button className="w-full" type="submit" disabled={loading}>
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </Button>
+              </form>
+
+              <div className="text-center text-sm">
+                Don't have an account?{' '}
+                <Link href="/register" className="text-primary hover:underline font-medium">
+                  Register here
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Copyright */}
+          <div className="lg:hidden mt-8 text-center">
+            <p className="text-white/70 text-xs">
+              Copyright © {new Date().getFullYear()} Ministry of Education, Youth and Sport (MoEYS)
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
