@@ -25,7 +25,7 @@ export default function LoginPage() {
   const { showToast } = useToast();
   
   // Form state
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +38,7 @@ export default function LoginPage() {
     const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
     
     if (savedEmail && savedPassword && savedRememberMe) {
-      setEmail(savedEmail);
+      setUsername(savedEmail);
       setPassword(savedPassword);
       setRememberMe(true);
     }
@@ -56,9 +56,8 @@ export default function LoginPage() {
     e?.preventDefault();
     setLoading(true);
     
-    // Validate inputs
-    const username = email.trim();
-    if (!username) {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
       showToast('Please enter your username', 'error');
       setLoading(false);
       return;
@@ -70,27 +69,21 @@ export default function LoginPage() {
       return;
     }
     
-    // Create abort controller for timeout (20 seconds)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, 20000);
     
     try {
-      console.log('[LOGIN] Sending login request...');
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: username, password }),
+        body: JSON.stringify({ email: trimmedUsername, password }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      console.log('[LOGIN] Response received:', res.status, res.statusText);
-
-      // Parse response
       const text = await res.text();
-      console.log('[LOGIN] Response text:', text.substring(0, 200));
       
       if (!text) {
         showToast('Empty response from server. Please try again.', 'error');
@@ -102,22 +95,18 @@ export default function LoginPage() {
       try {
         data = JSON.parse(text);
       } catch (parseError) {
-        console.error('[LOGIN] Parse error:', parseError);
         showToast(`Server error: ${res.status} ${res.statusText}`, 'error');
         setLoading(false);
         return;
       }
       
-      // Check for errors
       if (!res.ok || !data.success) {
         const errorMsg = data?.error || data?.message || data?.detail || 'Login failed';
-        console.error('[LOGIN] Login failed:', errorMsg);
         showToast(errorMsg, 'error');
         setLoading(false);
         return;
       }
 
-      // Validate token
       const token = data.token;
       if (!token) {
         showToast('Invalid response from server. No authentication token received.', 'error');
@@ -125,19 +114,17 @@ export default function LoginPage() {
         return;
       }
 
-      // Save authentication data
       const user = data.user || { 
-        email: username, 
-        name: username.split('@')[0], 
-        username: username 
+        email: trimmedUsername, 
+        name: trimmedUsername.split('@')[0], 
+        username: trimmedUsername 
       };
       
       setToken(token);
       setUser(user);
       
-      // Handle remember me functionality
       if (rememberMe) {
-        localStorage.setItem('rememberedEmail', username);
+        localStorage.setItem('rememberedEmail', trimmedUsername);
         localStorage.setItem('rememberedPassword', password);
         localStorage.setItem('rememberMe', 'true');
       } else {
@@ -266,16 +253,16 @@ export default function LoginPage() {
               <CardContent className="space-y-4 sm:space-y-6">
                 <form onSubmit={submit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm font-medium">
+                    <Label htmlFor="username" className="text-sm font-medium">
                       Username
                     </Label>
                     <Input
-                      id="email"
+                      id="username"
                       type="text"
                       placeholder="Enter username"
                       required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
                       disabled={loading}
                       className="text-sm sm:text-base"
                     />
