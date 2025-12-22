@@ -6,21 +6,19 @@
 // - Redirects to dashboard on successful login
 // - Shows error messages for failed attempts
 
-import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { setToken, setUser } from '@/lib/auth';
-import { logger } from '@/lib/logger';
 import { useToast } from '@/components/ui/toast';
 import { OptimizedImage } from '@/components/ui/optimized-image';
-import { IMAGE_PATHS, IMAGE_CONFIG } from '@/lib/images';
+import { IMAGE_PATHS } from '@/lib/images';
 
 export default function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const isRegistered = searchParams.get('registered') === 'true';
   const redirectTo = searchParams.get('redirect') || '/dashboard';
@@ -30,6 +28,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
+    
+    if (savedEmail && savedPassword && savedRememberMe) {
+      setEmail(savedEmail);
+      setPassword(savedPassword);
+      setRememberMe(true);
+    }
+  }, []);
 
   // Show success toast when redirected from registration
   useEffect(() => {
@@ -122,6 +135,17 @@ export default function LoginPage() {
       setToken(token);
       setUser(user);
       
+      // Handle remember me functionality
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', username);
+        localStorage.setItem('rememberedPassword', password);
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberedPassword');
+        localStorage.removeItem('rememberMe');
+      }
+      
       // Show success toast
       showToast('Login successful! Redirecting...', 'success');
       
@@ -154,8 +178,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="fixed inset-0 min-h-screen flex overflow-hidden">
-      {/* Background Image - Full Screen */}
+    <div className="fixed inset-0 min-h-screen overflow-hidden">
       <div className="fixed inset-0 z-0">
         <OptimizedImage
           src={IMAGE_PATHS.promotional.version2}
@@ -166,104 +189,173 @@ export default function LoginPage() {
           priority
           className="object-cover blur-[3px]"
         />
-        {/* Dark overlay for better readability */}
         <div className="absolute inset-0 bg-black/50" />
-        {/* Gradient overlay for better contrast */}
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
       </div>
 
-      {/* Left Side - Copyright */}
-      <div className="hidden lg:flex lg:w-1/2 relative z-10 items-center justify-center p-4 sm:p-8">
-        <div className="w-full max-w-md">
-          {/* Copyright - Centered */}
-          <div className="space-y-4 text-center">
-            <div className="flex items-center gap-4 justify-center">
-              <OptimizedImage
-                src={IMAGE_PATHS.logos.moeys}
-                alt="MoEYS Logo"
-                width={60}
-                height={60}
-                className="opacity-90"
-              />
-              <div className="text-white/80">
-                <p className="font-semibold text-lg">Ministry of Education, Youth and Sport</p>
-                <p className="text-base">MoEYS EdTech Platform</p>
+      <div className="relative z-10 min-h-screen grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-1 xl:gap-2">
+        <div className="flex items-center justify-center p-4 sm:p-6 lg:p-6 xl:p-8 order-1 lg:order-1">
+          <div className="w-full max-w-md xl:max-w-lg">
+            <div className="space-y-4 sm:space-y-5 lg:space-y-6 text-center">
+              <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-5 justify-center">
+                <div className="flex items-center justify-center gap-3 sm:gap-4 lg:gap-5 flex-wrap">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 relative shrink-0">
+                    <OptimizedImage
+                      src={IMAGE_PATHS.logos.moeys}
+                      alt="MoEYS Logo"
+                      fill
+                      className="opacity-90 object-contain"
+                    />
+                  </div>
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 relative shrink-0">
+                    <OptimizedImage
+                      src={IMAGE_PATHS.logos.foed}
+                      alt="FOED Logo"
+                      fill
+                      className="opacity-90 object-contain"
+                    />
+                  </div>
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 relative shrink-0">
+                    <OptimizedImage
+                      src={IMAGE_PATHS.logos.worldBank}
+                      alt="World Bank Logo"
+                      fill
+                      className="opacity-90 object-contain"
+                    />
+                  </div>
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 relative shrink-0">
+                    <OptimizedImage
+                      src={IMAGE_PATHS.logos.partner}
+                      alt="Partner Logo"
+                      fill
+                      className="opacity-90 object-contain"
+                    />
+                  </div>
+                </div>
+                
+                <div className="text-white/80">
+                  <p className="font-semibold text-xl sm:text-base lg:text-lg xl:text-xl 2xl:text-2xl whitespace-nowrap">
+                    Ministry of Education, Youth and Sport
+                  </p>
+                  <p className="text-sm sm:text-sm lg:text-base xl:text-lg mt-1">
+                    MoEYS EdTech Platform
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="pt-4 border-t border-white/20">
-              <p className="text-white/70 text-base">
-                Copyright © {new Date().getFullYear()} Ministry of Education, Youth and Sport (MoEYS)
-              </p>
-              <p className="text-white/60 text-sm mt-1">
-                All rights reserved. Powered by GEIP EdTech FOEDRUPP
-              </p>
+              <div className="pt-3 sm:pt-4 lg:pt-5 border-t border-white/20">
+                <p className="text-white/70 text-xs sm:text-xs lg:text-sm xl:text-sm leading-relaxed px-2">
+                  Copyright © {new Date().getFullYear()} Ministry of Education, Youth and Sport (MoEYS)
+                </p>
+                <p className="text-white/60 text-xs sm:text-xs lg:text-sm xl:text-sm mt-2 px-2">
+                  All rights reserved. Powered by GEIP EdTech FOEDRUPP
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 relative z-10 flex items-center justify-center p-4 sm:p-8">
-        <div className="w-full max-w-md">
+        <div className="flex items-center justify-center p-4 sm:p-6 lg:p-6 xl:p-8 order-2 lg:order-2">
+          <div className="w-full max-w-md">
+            <Card className="border-2 shadow-xl bg-card/95 backdrop-blur-sm">
+              <CardHeader className="space-y-2 text-center">
+                <CardTitle className="text-xl sm:text-2xl font-bold">Login</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Enter your credentials to access your account
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 sm:space-y-6">
+                <form onSubmit={submit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm font-medium">
+                      Username
+                    </Label>
+                    <Input
+                      id="email"
+                      type="text"
+                      placeholder="Enter username"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-sm font-medium">
+                      Password
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={loading}
+                        className="text-sm sm:text-base pr-10"
+                        aria-describedby="password-toggle-description"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowPassword((prev) => !prev);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setShowPassword((prev) => !prev);
+                          }
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={loading}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
+                        tabIndex={0}
+                      >
+                        {showPassword ? (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                      <span id="password-toggle-description" className="sr-only">
+                        {showPassword ? 'Password is visible' : 'Password is hidden'}
+                      </span>
+                    </div>
+                  </div>
 
-          {/* Login Card */}
-          <Card className="border-2 shadow-xl bg-card/95 backdrop-blur-sm">
-            <CardHeader className="space-y-2 text-center">
-              <CardTitle className="text-2xl font-bold">Login</CardTitle>
-              <CardDescription>
-                Enter your credentials to access your account
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <form onSubmit={submit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-medium">
-                    Username
-                  </Label>
-                  <Input
-                    id="email"
-                    type="text"
-                    placeholder="Enter username"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-medium">
-                    Password
-                  </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="remember"
+                      checked={rememberMe}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setRememberMe(checked);
+                        if (!checked) {
+                          // Clear saved credentials when unchecked
+                          localStorage.removeItem('rememberedEmail');
+                          localStorage.removeItem('rememberedPassword');
+                          localStorage.removeItem('rememberMe');
+                        }
+                      }}
+                      disabled={loading}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                      Remember me
+                    </Label>
+                  </div>
 
-                <Button className="w-full" type="submit" disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
-
-              <div className="text-center text-sm">
-                Don't have an account?{' '}
-                <Link href="/register" className="text-primary hover:underline font-medium">
-                  Register here
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Mobile Copyright */}
-          <div className="lg:hidden mt-8 text-center">
-            <p className="text-white/70 text-xs">
-              Copyright © {new Date().getFullYear()} Ministry of Education, Youth and Sport (MoEYS)
-            </p>
+                  <Button className="w-full text-sm sm:text-base" type="submit" disabled={loading}>
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
