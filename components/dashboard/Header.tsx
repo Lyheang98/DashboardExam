@@ -95,16 +95,33 @@ export function Header({ onMenuToggle }: HeaderProps) {
                 <DropdownMenuItem>Help</DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={async () => {
+                    // Clear local storage first
+                    clearToken();
+                    
+                    // Try to clear cookie via API (non-blocking)
                     try {
-                      clearToken();
-                      // Clear cookie via API
-                      await fetch('/api/auth/logout', { method: 'POST' });
-                      showToast('Logged out successfully', 'success');
-                      router.push("/login");
+                      const response = await fetch('/api/auth/logout', { 
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                      });
+                      
+                      if (!response.ok) {
+                        throw new Error('Logout API failed');
+                      }
                     } catch (error) {
+                      // Log error but don't block logout
                       console.error('Logout API error:', error);
-                      showToast('Error during logout', 'error');
                     }
+                    
+                    // Show info toast and redirect (info is best practice for logout)
+                    showToast('Logged out successfully', 'info');
+                    
+                    // Small delay to show toast before redirect
+                    setTimeout(() => {
+                      router.push("/login");
+                    }, 300);
                   }}
                   className="text-destructive"
                 >
