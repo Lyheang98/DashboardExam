@@ -15,55 +15,138 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { setToken, setUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { useToast } from '@/components/ui/toast';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRegistered = searchParams.get('registered') === 'true';
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
+  const { showToast } = useToast();
   
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(isRegistered);
 
-  // Auto-hide success message after 4 seconds
+  // Show success toast when redirected from registration
   useEffect(() => {
     if (isRegistered) {
-      const timer = setTimeout(() => setShowSuccess(false), 4000);
-      return () => clearTimeout(timer);
+      showToast('Account created successfully! You can now sign in.', 'success');
     }
-  }, [isRegistered]);
+  }, [isRegistered, showToast]);
 
   // Handle login submission
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    setError(null);
     setLoading(true);
+    
+    // Validate inputs
+    const username = email.trim();
+    if (!username) {
+      showToast('Please enter your username', 'error');
+      setLoading(false);
+      return;
+    }
+    
+    if (!password) {
+      showToast('Please enter your password', 'error');
+      setLoading(false);
+      return;
+    }
+    
+    // Create abort controller for timeout (20 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 20000);
+    
     try {
-      // Call login API endpoint
+      console.log('[LOGIN] Sending login request...');
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: username, password }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error || 'Login failed');
-        logger.warn('Login failed', 'AUTH', new Error(data?.error));
+
+      clearTimeout(timeoutId);
+      console.log('[LOGIN] Response received:', res.status, res.statusText);
+
+      // Parse response
+      const text = await res.text();
+      console.log('[LOGIN] Response text:', text.substring(0, 200));
+      
+      if (!text) {
+        showToast('Empty response from server. Please try again.', 'error');
+        setLoading(false);
         return;
       }
 
-      // Store token and user info in localStorage
-      setToken(data.token);
-      setUser(data.user);
-      logger.info(`User logged in: ${email}`, 'AUTH');
-      router.push('/dashboard');
-    } catch (err) {
-      setError('Login failed');
-      logger.error('Login error', 'AUTH', err);
-    } finally {
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[LOGIN] Parse error:', parseError);
+        showToast(`Server error: ${res.status} ${res.statusText}`, 'error');
+        setLoading(false);
+        return;
+      }
+      
+      // Check for errors
+      if (!res.ok || !data.success) {
+        const errorMsg = data?.error || data?.message || data?.detail || 'Login failed';
+        console.error('[LOGIN] Login failed:', errorMsg);
+        showToast(errorMsg, 'error');
+        setLoading(false);
+        return;
+      }
+
+      // Validate token
+      const token = data.token;
+      if (!token) {
+        showToast('Invalid response from server. No authentication token received.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      // Save authentication data
+      const user = data.user || { 
+        email: username, 
+        name: username.split('@')[0], 
+        username: username 
+      };
+      
+      setToken(token);
+      setUser(user);
+      
+      // Show success toast
+      showToast('Login successful! Redirecting...', 'success');
+      
+      // Clear loading state
+      setLoading(false);
+      
+      // Redirect to the intended destination or dashboard
+      const destination = redirectTo || '/dashboard';
+      console.log('[LOGIN] Login successful, redirecting to:', destination);
+      
+      // Small delay to show toast before redirect
+      setTimeout(() => {
+        window.location.href = destination;
+      }, 500);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      console.error('[LOGIN] Error:', err);
+      
+      let errorMsg = 'Network error. Please check your internet connection and try again.';
+      
+      if (err.name === 'AbortError') {
+        errorMsg = 'Request timed out. The server is taking too long to respond. Please try again.';
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      
+      showToast(errorMsg, 'error');
       setLoading(false);
     }
   }
@@ -78,21 +161,13 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {showSuccess && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <p className="text-green-800 dark:text-green-200 font-medium text-sm">
-                ✓ Account created successfully! You can now sign in.
-              </p>
-            </div>
-          )}
-
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Username</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="john@example.com"
+                type="text"
+                placeholder="Enter username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -111,12 +186,6 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-              </div>
-            )}
 
             <Button className="w-full" type="submit" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}

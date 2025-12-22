@@ -1,26 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchAndFilterUsers, StoredUser } from '@/lib/storage';
-import { logger } from '@/lib/logger';
+import { usersService } from '@/lib/api';
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get('q') || '';
-    const role = searchParams.get('role') || undefined;
-    const status = searchParams.get('status') || undefined;
+    // Get token from Authorization header or cookie
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '') || 
+                  request.cookies.get('token')?.value || '';
 
-    const users = await searchAndFilterUsers(query, { role, status });
-    const safeUsers = users.map(({ password: _password, ...user }: StoredUser) => user);
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const params = {
+      q: searchParams.get('q') || undefined,
+      role: searchParams.get('role') || undefined,
+      status: searchParams.get('status') || undefined,
+    };
+
+    const result = await usersService.search(token, params);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      count: safeUsers.length,
-      data: safeUsers,
+      count: result.count || 0,
+      data: result.data || [],
     });
-  } catch (error) {
-    logger.error('User search failed', 'API/USERS/SEARCH', error);
+  } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: 'Search failed' },
+      { success: false, error: error?.message || 'Search failed' },
       { status: 500 }
     );
   }

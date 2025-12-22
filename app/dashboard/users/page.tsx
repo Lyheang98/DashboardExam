@@ -40,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/dashboard/DataTable";
 import { logger } from "@/lib/logger";
+import { getToken } from "@/lib/auth";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -142,7 +143,6 @@ export default function UsersPage() {
    */
   const fetchUsers = async () => {
     setLoading(true);
-    const startTime = Date.now();
 
     try {
       // Build query parameters
@@ -151,12 +151,19 @@ export default function UsersPage() {
       if (roleFilter) params.append("role", roleFilter);
       if (statusFilter) params.append("status", statusFilter);
 
-      const response = await fetch(`/api/users/search?${params.toString()}`);
+      const token = getToken();
+      const response = await fetch(`/api/users/search?${params.toString()}`, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
+        },
+      });
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
 
+      // Map users (API already filters for staff)
       const allUsers = (data.data || []).map((user: any) => ({
         id: user.id,
         name: user.name,

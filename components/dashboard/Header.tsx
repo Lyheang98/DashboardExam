@@ -19,6 +19,7 @@ import {
 import { useRouter } from "next/navigation";
 import { clearToken, getUser } from "@/lib/auth";
 import { useEffect, useState } from "react";
+import { useToast } from "@/components/ui/toast";
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -26,9 +27,12 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [userName, setUserName] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const u = getUser();
     setUserName(u?.name || null);
   }, []);
@@ -72,34 +76,49 @@ export function Header({ onMenuToggle }: HeaderProps) {
           
 
           {/* User & Settings */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              {userName && (
-                <>
-                  <div className="px-2 py-1 text-xs text-muted-foreground">
-                    Signed in as
-                  </div>
-                  <DropdownMenuItem disabled>{userName}</DropdownMenuItem>
-                </>
-              )}
-              <DropdownMenuItem>Help</DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  clearToken();
-                  router.push("/login");
-                }}
-                className="text-destructive"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {mounted && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {userName && (
+                  <>
+                    <div className="px-2 py-1 text-xs text-muted-foreground">
+                      Signed in as
+                    </div>
+                    <DropdownMenuItem>{userName}</DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem>Help</DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    try {
+                      clearToken();
+                      // Clear cookie via API
+                      await fetch('/api/auth/logout', { method: 'POST' });
+                      showToast('Logged out successfully', 'success');
+                      router.push("/login");
+                    } catch (error) {
+                      console.error('Logout API error:', error);
+                      showToast('Error during logout', 'error');
+                    }
+                  }}
+                  className="text-destructive"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {!mounted && (
+            <Button variant="ghost" size="icon">
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </header>

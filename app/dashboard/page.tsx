@@ -107,7 +107,36 @@ export default function DashboardPage() {
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
+        <StatCard
+          title="Schools"
+          value={products.filter((p: any) => p.stock > 0).length}
+          description="Available products"
+          icon={TrendingUp}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="Student"
+          value={products.filter((p: any) => p.stock > 0).length}
+          description="Available products"
+          icon={TrendingUp}
+          trend={{ value: 4, isPositive: true }}
+        />
+         <StatCard
+          title="Districts"
+          value={products.filter((p: any) => p.stock > 0).length}
+          description="Available products"
+          icon={TrendingUp}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="Subjects"
+          value={products.filter((p: any) => p.stock > 0).length}
+          description="Available products"
+          icon={TrendingUp}
+          trend={{ value: 4, isPositive: true }}
+        />
       </div>
+      
 
       {/* Users chart */}
       <div className="mt-6 sm:mt-4 lg:mt-3">
