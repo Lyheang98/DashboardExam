@@ -22,6 +22,11 @@ export default function DashboardPage() {
   const [productsGran, setProductsGran] = useState<'Day'|'Month'|'Year'>('Month');
   const [usersYear, setUsersYear] = useState('2025');
   const [productsYear, setProductsYear] = useState('2025');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -92,7 +97,7 @@ export default function DashboardPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Stats Cards - First Grid */}
-      <div className="grid mt-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-0 mb-4 sm:mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-0 mb-4 sm:mb-5">
         <StatCard
           title="Total Users"
           value={users.length}
@@ -161,18 +166,22 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
           <h2 className="text-lg sm:text-xl font-semibold text-primary">Users</h2>
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <Select value={usersYear} onValueChange={setUsersYear}>
-              <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {['2025','2026','2027','2028','2029','2030'].map((year) => (
-                  <SelectItem key={year} value={year}>
-                    {year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {mounted ? (
+              <Select value={usersYear} onValueChange={setUsersYear}>
+                <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {['2025','2026','2027','2028','2029','2030'].map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="w-20 sm:w-24 h-9 border rounded-md bg-background" />
+            )}
             <div className="flex space-x-1 sm:space-x-2">
               {(['Day','Month','Year'] as const).map((g) => (
                 <button
@@ -202,18 +211,22 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
           <h2 className="text-lg sm:text-xl font-semibold text-primary">Products</h2>
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <Select value={productsYear} onValueChange={setProductsYear}>
-              <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {['2025','2026','2027','2028','2029','2030'].map((year) => (
-                  <SelectItem key={year} value={year}>
-                    {year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {mounted ? (
+              <Select value={productsYear} onValueChange={setProductsYear}>
+                <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {['2025','2026','2027','2028','2029','2030'].map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="w-20 sm:w-24 h-9 border rounded-md bg-background" />
+            )}
             <div className="flex space-x-1 sm:space-x-2">
               {(['Day','Month','Year'] as const).map((g) => (
                 <button
