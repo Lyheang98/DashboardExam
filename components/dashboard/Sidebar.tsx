@@ -7,21 +7,23 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { IMAGE_PATHS, IMAGE_CONFIG } from "@/lib/images";
+import { useLanguage } from "@/lib/i18n/context";
 
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
 }
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: Users, label: "Users Account and Right", href: "/dashboard/users" },
-  { icon: Package, label: "Products", href: "/dashboard/products" },
-  { icon: Settings, label: "Settings", href: "/dashboard/setting" },
-];
-
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { t } = useLanguage();
+
+  const menuItems = [
+    { icon: LayoutDashboard, label: t.sidebar.dashboard, href: "/dashboard" },
+    { icon: Users, label: t.sidebar.users, href: "/dashboard/users" },
+    { icon: Package, label: t.sidebar.products, href: "/dashboard/products" },
+    { icon: Settings, label: t.sidebar.settings, href: "/dashboard/setting" },
+  ];
 
   return (
     <>

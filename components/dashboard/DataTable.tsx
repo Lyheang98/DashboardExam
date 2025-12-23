@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useLanguage } from "@/lib/i18n/context";
 
 export interface DataTableColumn<T> {
   key: keyof T;
@@ -45,6 +46,7 @@ export function DataTable<T extends { id: string | number }>({
   onEdit,
   onDelete,
 }: DataTableProps<T>) {
+  const { t } = useLanguage();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<T | null>(null);
 
@@ -78,7 +80,7 @@ export function DataTable<T extends { id: string | number }>({
                 {column.label}
               </TableHead>
             ))}
-            {(onEdit || onDelete) && <TableHead>Actions</TableHead>}
+            {(onEdit || onDelete) && <TableHead>{t.table.actions}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -88,7 +90,7 @@ export function DataTable<T extends { id: string | number }>({
                 colSpan={columns.length + (onEdit || onDelete ? 1 : 0)}
                 className="text-center py-8 text-muted-foreground"
               >
-                No data available
+                {t.table.noDataAvailable}
               </TableCell>
             </TableRow>
           ) : (
@@ -112,7 +114,7 @@ export function DataTable<T extends { id: string | number }>({
                       <DropdownMenuContent align="end">
                         {onEdit && (
                           <DropdownMenuItem onClick={() => onEdit(row)}>
-                            Edit
+                            {t.table.edit}
                           </DropdownMenuItem>
                         )}
                         {onDelete && (
@@ -120,7 +122,7 @@ export function DataTable<T extends { id: string | number }>({
                             onClick={() => handleDeleteClick(row)}
                             className="text-destructive"
                           >
-                            Delete
+                            {t.table.delete}
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
@@ -136,19 +138,18 @@ export function DataTable<T extends { id: string | number }>({
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogTitle>{t.common.confirmDelete}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this item? This action cannot be
-              undone.
+              {t.common.confirmDeleteMessage}
             </DialogDescription>
           </DialogHeader>
 
           <DialogFooter>
             <Button variant="outline" onClick={handleCancelDelete}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button variant="destructive" onClick={handleConfirmDelete}>
-              Delete
+              {t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>

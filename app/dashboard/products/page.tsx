@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/dashboard/DataTable";
 import { logger } from "@/lib/logger";
+import { useLanguage } from "@/lib/i18n/context";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -57,6 +58,7 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  const { t } = useLanguage();
   // ============================================
   // STATE MANAGEMENT
   // ============================================
@@ -66,6 +68,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   /** Loading state indicator for API calls */
   const [loading, setLoading] = useState(true);
+  /** Mounted state to prevent hydration mismatches */
+  const [mounted, setMounted] = useState(false);
 
   // Pagination state
   /** Current page number (1-indexed) */
@@ -116,6 +120,22 @@ export default function ProductsPage() {
   }, [searchQuery]);
 
   /**
+   * Effect: Initialize component (hydration safety)
+   * Prevents hydration mismatches by only rendering interactive components after mount
+   */
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  /**
+   * Effect: Initialize component (hydration safety)
+   * Prevents hydration mismatches by only rendering interactive components after mount
+   */
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  /**
    * Effect: Fetch products when filters, pagination, or search changes
    * Uses debounced search query to reduce API calls
    */
@@ -153,14 +173,22 @@ export default function ProductsPage() {
 
       const data = await response.json();
 
-      const allProducts = (data.data || []).map((product: any) => ({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        category: product.category || "General",
-        stock: product.stock || 0,
-        status: (product.stock || 0) > 0 ? "Available" : "Out of Stock",
-      }));
+      const allProducts: Product[] = (data.data || []).map(
+        (product: {
+          id: string | number;
+          name: string;
+          price: number;
+          category?: string;
+          stock?: number;
+        }) => ({
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          category: product.category || 'General',
+          stock: product.stock || 0,
+          status: (product.stock || 0) > 0 ? 'Available' : 'Out of Stock',
+        })
+      );
 
       setProducts(allProducts);
       setTotal(allProducts.length);
@@ -336,11 +364,11 @@ export default function ProductsPage() {
               htmlFor="search"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Search by product name
+              {t.products.searchByName}
             </Label>
             <Input
               id="search"
-              placeholder="Type product name..."
+              placeholder={t.products.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full"
@@ -353,7 +381,7 @@ export default function ProductsPage() {
               htmlFor="category-filter"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Filter by Category
+              {t.products.filterByCategory}
             </Label>
             <select
               id="category-filter"
@@ -361,13 +389,13 @@ export default function ProductsPage() {
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">All Categories</option>
-              <option value="electronics">Electronics</option>
-              <option value="clothing">Clothing</option>
-              <option value="furniture">Furniture</option>
-              <option value="beauty">Beauty</option>
-              <option value="groceries">Groceries</option>
-              <option value="home-decoration">Home Decoration</option>
+              <option value="">{t.products.allCategories}</option>
+              <option value="electronics">{t.products.electronics}</option>
+              <option value="clothing">{t.products.clothing}</option>
+              <option value="furniture">{t.products.furniture}</option>
+              <option value="beauty">{t.products.beauty}</option>
+              <option value="groceries">{t.products.groceries}</option>
+              <option value="home-decoration">{t.products.homeDecoration}</option>
             </select>
           </div>
 
@@ -377,7 +405,7 @@ export default function ProductsPage() {
               htmlFor="price-min"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Min Price ($)
+              {t.products.minPrice}
             </Label>
             <Input
               id="price-min"
@@ -397,7 +425,7 @@ export default function ProductsPage() {
               htmlFor="price-max"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Max Price ($)
+              {t.products.maxPrice}
             </Label>
             <Input
               id="price-max"
@@ -419,25 +447,26 @@ export default function ProductsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-sans font-bold tracking-tight">
-            Products
+            {t.products.title}
           </h1>
           <p className="text-muted-foreground mt-2">
-            View and manage your product inventory.
+            {t.products.subtitle}
           </p>
         </div>
 
         {/* Create Product Dialog */}
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>Add Product</Button>
-          </DialogTrigger>
-          <DialogContent>
+        {mounted ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openCreate}>{t.products.addProduct}</Button>
+            </DialogTrigger>
+            <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editing ? "Edit Product" : "Add Product"}
+                {editing ? t.products.editProduct : t.products.addProduct}
               </DialogTitle>
               <DialogDescription>
-                {editing ? "Update product details" : "Create a new product"}
+                {editing ? t.products.updateProduct : t.products.createProduct}
               </DialogDescription>
             </DialogHeader>
 
@@ -445,7 +474,7 @@ export default function ProductsPage() {
             <div className="space-y-4 py-2">
               {/* Product Name Field */}
               <div className="space-y-1">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t.products.productName}</Label>
                 <Input
                   id="name"
                   value={form.name}
@@ -459,7 +488,7 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2">
                 {/* Price Field */}
                 <div className="space-y-1">
-                  <Label htmlFor="price">Price</Label>
+                  <Label htmlFor="price">{t.products.price}</Label>
                   <Input
                     id="price"
                     type="number"
@@ -472,7 +501,7 @@ export default function ProductsPage() {
 
                 {/* Stock Field */}
                 <div className="space-y-1">
-                  <Label htmlFor="stock">Stock</Label>
+                  <Label htmlFor="stock">{t.products.stock}</Label>
                   <Input
                     id="stock"
                     type="number"
@@ -486,7 +515,7 @@ export default function ProductsPage() {
 
               {/* Category Field */}
               <div className="space-y-1">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="category">{t.products.category}</Label>
                 <Input
                   id="category"
                   value={form.category}
@@ -498,7 +527,7 @@ export default function ProductsPage() {
 
               {/* Status Dropdown */}
               <div className="space-y-1">
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status">{t.common.status}</Label>
                 <select
                   id="status"
                   value={form.status}
@@ -507,8 +536,8 @@ export default function ProductsPage() {
                   }
                   className="w-full rounded border px-2 py-1"
                 >
-                  <option>Available</option>
-                  <option>Out of Stock</option>
+                  <option>{t.products.available}</option>
+                  <option>{t.products.outOfStock}</option>
                 </select>
               </div>
             </div>
@@ -517,15 +546,20 @@ export default function ProductsPage() {
             <DialogFooter>
               <DialogClose asChild>
                 <Button variant="outline" onClick={() => setOpen(false)}>
-                  Cancel
+                  {t.common.cancel}
                 </Button>
               </DialogClose>
               <Button onClick={submitForm}>
-                {editing ? "Save Changes" : "Create Product"}
+                {editing ? t.products.saveChanges : t.products.createProductButton}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        ) : (
+          <Button onClick={openCreate} disabled>
+            {t.products.addProduct}
+          </Button>
+        )}
       </div>
 
       {/* ============================================ */}
@@ -539,10 +573,10 @@ export default function ProductsPage() {
               <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
             </div>
             <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Loading Products
+              {t.products.loadingProducts}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Please wait while we fetch your products...
+              {t.products.pleaseWaitProducts}
             </p>
           </div>
 
@@ -561,18 +595,18 @@ export default function ProductsPage() {
           {/* Data Table - Displays paginated products */}
           <DataTable<Product>
             columns={[
-              { key: "name", label: "Product Name" },
+              { key: "name", label: t.products.productName },
               {
                 key: "price",
-                label: "Price",
+                label: t.products.price,
                 // Format price with dollar sign
                 render: (value) => `$${value}`,
               },
-              { key: "category", label: "Category" },
-              { key: "stock", label: "Stock" },
+              { key: "category", label: t.products.category },
+              { key: "stock", label: t.products.stock },
               {
                 key: "status",
-                label: "Status",
+                label: t.common.status,
                 render: (value, row) => (
                   <button
                     onClick={() => toggleStatus(row as Product)}
@@ -582,7 +616,7 @@ export default function ProductsPage() {
                         : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800"
                     }`}
                   >
-                    {value === "Available" ? "Available" : "Out of Stock"}
+                    {value === "Available" ? t.products.available : t.products.outOfStock}
                   </button>
                 ),
               },
@@ -598,7 +632,7 @@ export default function ProductsPage() {
           <div className="flex items-center justify-between mt-4">
             {/* Items Counter */}
             <div className="text-sm text-muted-foreground">
-              Showing {start}–{end} of {total}
+              {t.common.showing} {start}–{end} {t.common.of} {total}
             </div>
 
             {/* Navigation */}
@@ -609,11 +643,11 @@ export default function ProductsPage() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
-                Prev
+                {t.common.prev}
               </Button>
 
               <div className="px-3 text-sm">
-                Page {page} of {totalPages}
+                {t.common.page} {page} {t.common.of} {totalPages}
               </div>
 
               <Button
@@ -622,7 +656,7 @@ export default function ProductsPage() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >
-                Next
+                {t.common.next}
               </Button>
 
               <select

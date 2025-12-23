@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/dashboard/Header";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { getToken } from "@/lib/auth";
+import { LanguageProvider } from "@/lib/i18n/context";
 
 export default function DashboardLayout({
   children,
@@ -19,8 +20,22 @@ export default function DashboardLayout({
     if (!token) router.push("/login");
   }, [router]);
 
+  // Clear authentication on page unload (when closing browser/tab)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Clear the cookie when page unloads
+      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   return (
-    <>
+    <LanguageProvider>
       {/* Sidebar (fixed) */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -61,6 +76,6 @@ export default function DashboardLayout({
           {children}
         </div>
       </main>
-    </>
+    </LanguageProvider>
   );
 }

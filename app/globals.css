@@ -125,6 +125,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   --font-sans: var(--font-sora);
+  --font-khmer: var(--font-kantumruy-pro);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
@@ -143,6 +144,97 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+  }
+
+  /* Ensure Khmer font takes precedence on body when language is Khmer */
+  html.lang-khmer body {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Khmer font support - Apply to ALL elements */
+  html.lang-khmer,
+  html.lang-khmer *,
+  html.lang-khmer h1,
+  html.lang-khmer h2,
+  html.lang-khmer h3,
+  html.lang-khmer h4,
+  html.lang-khmer h5,
+  html.lang-khmer h6,
+  html.lang-khmer p,
+  html.lang-khmer span,
+  html.lang-khmer div,
+  html.lang-khmer button,
+  html.lang-khmer input,
+  html.lang-khmer textarea,
+  html.lang-khmer label,
+  html.lang-khmer select,
+  html.lang-khmer option,
+  html.lang-khmer td,
+  html.lang-khmer th,
+  html.lang-khmer li,
+  html.lang-khmer ul,
+  html.lang-khmer ol,
+  html.lang-khmer a,
+  html.lang-khmer [role="button"],
+  html.lang-khmer [role="menuitem"],
+  html.lang-khmer [role="option"] {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  body.font-khmer,
+  body.font-khmer *,
+  body.font-khmer h1,
+  body.font-khmer h2,
+  body.font-khmer h3,
+  body.font-khmer h4,
+  body.font-khmer h5,
+  body.font-khmer h6,
+  body.font-khmer p,
+  body.font-khmer span,
+  body.font-khmer div,
+  body.font-khmer button,
+  body.font-khmer input,
+  body.font-khmer textarea,
+  body.font-khmer label,
+  body.font-khmer select,
+  body.font-khmer option,
+  body.font-khmer td,
+  body.font-khmer th,
+  body.font-khmer li,
+  body.font-khmer ul,
+  body.font-khmer ol,
+  body.font-khmer a,
+  body.font-khmer [role="button"],
+  body.font-khmer [role="menuitem"],
+  body.font-khmer [role="option"] {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Universal catch-all for Khmer language - ensures ALL elements get the font */
+  html.lang-khmer *:not(script):not(style):not([class*="font-mono"]) {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Additional specificity for body elements */
+  html.lang-khmer body,
+  html.lang-khmer body * {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Ensure dropdown menus and popovers use Kantumruy Pro for Khmer */
+  html.lang-khmer [role="menu"],
+  html.lang-khmer [role="menuitem"],
+  html.lang-khmer [data-radix-popper-content-wrapper],
+  html.lang-khmer [data-radix-dropdown-menu-content],
+  html.lang-khmer [data-radix-select-content],
+  html.lang-khmer [data-radix-popover-content] {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Force Kantumruy Pro for Khmer text in language switcher dropdown */
+  [data-radix-dropdown-menu-content] [lang="km"],
+  [role="menuitem"] [lang="km"] {
+    font-family: var(--font-kantumruy-pro) !important;
   }
 }
 

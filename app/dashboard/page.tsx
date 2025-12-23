@@ -1,11 +1,26 @@
 'use client';
 
+/**
+ * Dashboard Page Component
+ * 
+ * Main dashboard view displaying statistics, charts, and data visualizations.
+ * Features:
+ * - Real-time data fetching from external APIs
+ * - Interactive charts with time granularity filters
+ * - Responsive stat cards
+ * - Multi-language support
+ * 
+ * @example
+ * ```tsx
+ * <DashboardPage />
+ * ```
+ */
+
 import { useEffect, useState, useMemo } from 'react';
 import { Users, Package, TrendingUp, DollarSign } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
-import { DataTable } from '@/components/dashboard/DataTable';
-import { ThemeToggle } from '@/components/dashboard/ThemeToggle';
-import { BarChart, LineChart } from '@/components/dashboard/Chart';
+import { BarChart } from '@/components/dashboard/Chart';
+import { GranularityButtons } from '@/components/dashboard/GranularityButtons';
 import {
   Select,
   SelectContent,
@@ -13,116 +28,117 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useLanguage } from '@/lib/i18n/context';
+import { DashboardUser, DashboardProduct, Granularity, ChartDataPoint } from './types';
+import { fetchDashboardData, generateChartSeries } from './utils';
+
+// Constants
+const AVAILABLE_YEARS = ['2025', '2026', '2027', '2028', '2029', '2030'] as const;
+const DEFAULT_GRANULARITY: Granularity = 'Month';
+const DEFAULT_YEAR = '2025';
 
 export default function DashboardPage() {
-  const [users, setUsers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const { t } = useLanguage();
+  
+  // State management
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [products, setProducts] = useState<DashboardProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usersGran, setUsersGran] = useState<'Day'|'Month'|'Year'>('Month');
-  const [productsGran, setProductsGran] = useState<'Day'|'Month'|'Year'>('Month');
-  const [usersYear, setUsersYear] = useState('2025');
-  const [productsYear, setProductsYear] = useState('2025');
+  const [usersGran, setUsersGran] = useState<Granularity>(DEFAULT_GRANULARITY);
+  const [productsGran, setProductsGran] = useState<Granularity>(DEFAULT_GRANULARITY);
+  const [usersYear, setUsersYear] = useState(DEFAULT_YEAR);
+  const [productsYear, setProductsYear] = useState(DEFAULT_YEAR);
   const [mounted, setMounted] = useState(false);
 
+  // Initialize component (hydration safety)
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Fetch dashboard data on mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [usersRes, productsRes] = await Promise.all([
-          fetch('https://dummyjson.com/users?limit=10'),
-          fetch('https://dummyjson.com/products?limit=10'),
-        ]);
-
-        const usersData = await usersRes.json();
-        const productsData = await productsRes.json();
-
-        const formattedUsers = (usersData.users || []).map((user: any) => ({
-          id: user.id,
-          name: `${user.firstName} ${user.lastName}`,
-          email: user.email,
-          role: user.role || 'User',
-          status: user.isActive ? 'Active' : 'Inactive',
-        }));
-
-        const formattedProducts = (productsData.products || []).map((product: any) => ({
-          id: product.id,
-          name: product.title,
-          price: product.price,
-          category: product.category,
-          stock: product.stock,
-          status: product.stock > 0 ? 'Available' : 'Out of Stock',
-        }));
-
-        setUsers(formattedUsers);
-        setProducts(formattedProducts);
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
-        setLoading(false);
-      }
+    const loadData = async () => {
+      setLoading(true);
+      const { users: fetchedUsers, products: fetchedProducts } = await fetchDashboardData();
+      setUsers(fetchedUsers);
+      setProducts(fetchedProducts);
+      setLoading(false);
     };
 
-    fetchData();
+    loadData();
   }, []);
 
-  function rand(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1)) + min
-  }
+  // Get translated month names
+  const monthNames = useMemo(
+    () => [
+      t.dashboard.months.january,
+      t.dashboard.months.february,
+      t.dashboard.months.march,
+      t.dashboard.months.april,
+      t.dashboard.months.may,
+      t.dashboard.months.june,
+      t.dashboard.months.july,
+      t.dashboard.months.august,
+      t.dashboard.months.september,
+      t.dashboard.months.october,
+      t.dashboard.months.november,
+      t.dashboard.months.december,
+    ],
+    [t]
+  );
 
-  function generateSeries(gran: 'Day' | 'Month' | 'Year', year?: string) {
-    if (gran === 'Day') {
-      const today = new Date()
-      const currentDay = today.getDate()
-      return Array.from({ length: currentDay }).map((_, i) => ({ label: `${i + 1}`, value: rand(200, 1200) }))
-    }
-    if (gran === 'Month') {
-      const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
-      const today = new Date()
-      const currentMonth = today.getMonth()
-      return months.slice(0, currentMonth + 1).map((m) => ({ label: m, value: rand(7000, 80000) }))
-    }
-    const years = ['2025','2026','2027','2028','2029','2030']
-    const today = new Date()
-    const currentYear = today.getFullYear()
-    const yearIndex = years.findIndex(y => parseInt(y) === currentYear)
-    return years.slice(0, yearIndex >= 0 ? yearIndex + 1 : years.length).map((y) => ({ label: y, value: rand(50000, 500000) }))
-  }
+  // Generate chart data with translations
+  const usersChartData = useMemo<ChartDataPoint[]>(
+    () => generateChartSeries(usersGran, usersYear, monthNames),
+    [usersGran, usersYear, monthNames]
+  );
 
-  const usersChartData = useMemo(() => generateSeries(usersGran, usersYear), [usersGran, usersYear]);
-  const productsChartData = useMemo(() => generateSeries(productsGran, productsYear), [productsGran, productsYear]);
+  const productsChartData = useMemo<ChartDataPoint[]>(
+    () => generateChartSeries(productsGran, productsYear, monthNames),
+    [productsGran, productsYear, monthNames]
+  );
+
+  // Calculate derived statistics
+  const averagePrice = useMemo(() => {
+    if (products.length === 0) return 0;
+    const total = products.reduce((sum, p) => sum + p.price, 0);
+    return total / products.length;
+  }, [products]);
+
+  const inStockCount = useMemo(
+    () => products.filter((p) => p.stock > 0).length,
+    [products]
+  );
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Stats Cards - First Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-0 mb-4 sm:mb-5">
         <StatCard
-          title="Total Users"
+          title={t.dashboard.totalUsers}
           value={users.length}
-          description="Active users from DummyJSON"
+          description={t.dashboard.activeUsersFrom}
           icon={Users}
           trend={{ value: 12, isPositive: true }}
         />
         <StatCard
-          title="Total Products"
+          title={t.dashboard.totalProducts}
           value={products.length}
-          description="Products in inventory"
+          description={t.dashboard.productsInInventory}
           icon={Package}
           trend={{ value: 5, isPositive: true }}
         />
         <StatCard
-          title="Average Price"
-          value={`$${products.length > 0 ? (products.reduce((sum: number, p: any) => sum + p.price, 0) / products.length).toFixed(2) : '0'}`}
-          description="Average product price"
+          title={t.dashboard.averagePrice}
+          value={`$${averagePrice.toFixed(2)}`}
+          description={t.dashboard.averageProductPrice}
           icon={DollarSign}
           trend={{ value: 8, isPositive: true }}
         />
         <StatCard
-          title="In Stock"
-          value={products.filter((p: any) => p.stock > 0).length}
-          description="Available products"
+          title={t.dashboard.inStock}
+          value={inStockCount}
+          description={t.dashboard.availableProducts}
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
@@ -131,30 +147,30 @@ export default function DashboardPage() {
       {/* Stats Cards - Second Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 sm:mb-6">
         <StatCard
-          title="Schools"
-          value={products.filter((p: any) => p.stock > 0).length}
-          description="Available products"
+          title={t.dashboard.schools}
+          value={inStockCount}
+          description={t.dashboard.availableProducts}
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
         <StatCard
-          title="Student"
-          value={products.filter((p: any) => p.stock > 0).length}
-          description="Available products"
+          title={t.dashboard.student}
+          value={inStockCount}
+          description={t.dashboard.availableProducts}
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
         <StatCard
-          title="Districts"
-          value={products.filter((p: any) => p.stock > 0).length}
-          description="Available products"
+          title={t.dashboard.districts}
+          value={inStockCount}
+          description={t.dashboard.availableProducts}
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
         <StatCard
-          title="Subjects"
-          value={products.filter((p: any) => p.stock > 0).length}
-          description="Available products"
+          title={t.dashboard.subjects}
+          value={inStockCount}
+          description={t.dashboard.availableProducts}
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
@@ -164,7 +180,7 @@ export default function DashboardPage() {
       {/* Users chart */}
       <div className="w-full mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
-          <h2 className="text-lg sm:text-xl font-semibold text-primary">Users</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-primary">{t.dashboard.users}</h2>
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             {mounted ? (
               <Select value={usersYear} onValueChange={setUsersYear}>
@@ -172,7 +188,7 @@ export default function DashboardPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {['2025','2026','2027','2028','2029','2030'].map((year) => (
+                  {AVAILABLE_YEARS.map((year) => (
                     <SelectItem key={year} value={year}>
                       {year}
                     </SelectItem>
@@ -182,25 +198,19 @@ export default function DashboardPage() {
             ) : (
               <div className="w-20 sm:w-24 h-9 border rounded-md bg-background" />
             )}
-            <div className="flex space-x-1 sm:space-x-2">
-              {(['Day','Month','Year'] as const).map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setUsersGran(g)}
-                  className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm transition-colors ${
-                    usersGran === g 
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/85' 
-                      : 'bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary'
-                  }`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
+            <GranularityButtons
+              value={usersGran}
+              onChange={setUsersGran}
+              translations={{
+                day: t.dashboard.day,
+                month: t.dashboard.month,
+                year: t.dashboard.year,
+              }}
+            />
           </div>
         </div>
         {loading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          <div className="text-center py-8 text-muted-foreground">{t.dashboard.loading}</div>
         ) : (
           <BarChart data={usersChartData} />
         )}
@@ -209,7 +219,7 @@ export default function DashboardPage() {
       {/* Products chart */}
       <div className="w-full mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
-          <h2 className="text-lg sm:text-xl font-semibold text-primary">Products</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-primary">{t.dashboard.products}</h2>
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             {mounted ? (
               <Select value={productsYear} onValueChange={setProductsYear}>
@@ -217,7 +227,7 @@ export default function DashboardPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {['2025','2026','2027','2028','2029','2030'].map((year) => (
+                  {AVAILABLE_YEARS.map((year) => (
                     <SelectItem key={year} value={year}>
                       {year}
                     </SelectItem>
@@ -227,26 +237,20 @@ export default function DashboardPage() {
             ) : (
               <div className="w-20 sm:w-24 h-9 border rounded-md bg-background" />
             )}
-            <div className="flex space-x-1 sm:space-x-2">
-              {(['Day','Month','Year'] as const).map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setProductsGran(g)}
-                  className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm transition-colors ${
-                    productsGran === g 
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/85' 
-                      : 'bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary'
-                  }`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
+            <GranularityButtons
+              value={productsGran}
+              onChange={setProductsGran}
+              translations={{
+                day: t.dashboard.day,
+                month: t.dashboard.month,
+                year: t.dashboard.year,
+              }}
+            />
           </div>
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          <div className="text-center py-8 text-muted-foreground">{t.dashboard.loading}</div>
         ) : (
           <BarChart data={productsChartData} color="#ed932b" />
         )}

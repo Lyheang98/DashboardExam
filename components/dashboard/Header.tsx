@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import { clearToken, getUser } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui/toast";
+import { useLanguage } from "@/lib/i18n/context";
+import { LanguageSwitcher } from "@/components/dashboard/LanguageSwitcher";
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -28,6 +30,7 @@ interface HeaderProps {
 export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [userName, setUserName] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -55,10 +58,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
           {/* Title */}
           <div className="flex-1 min-w-0">
             <h1 className="truncate text-base sm:text-xl md:text-2xl font-bold tracking-tight text-primary">
-              MoEYS EdTech Dashboard
+              {t.header.title}
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">
-              Monitor and manage your educational platform
+              {t.header.subtitle}
             </p>
           </div>
         </div>
@@ -70,6 +73,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <Bell className="h-5 w-5" />
             <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
           </Button>
+          <LanguageSwitcher />
           <div>
              <ThemeToggle />
           </div>
@@ -87,12 +91,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
                 {userName && (
                   <>
                     <div className="px-2 py-1 text-xs text-muted-foreground">
-                      Signed in as
+                      {t.header.signedInAs}
                     </div>
                     <DropdownMenuItem>{userName}</DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuItem>Help</DropdownMenuItem>
+                <DropdownMenuItem>{t.header.help}</DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={async () => {
                     // Clear local storage first
@@ -126,7 +130,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
                   className="text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  Logout
+                  {t.header.logout}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -41,6 +41,7 @@ import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/dashboard/DataTable";
 import { logger } from "@/lib/logger";
 import { getToken } from "@/lib/auth";
+import { useLanguage } from "@/lib/i18n/context";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -63,6 +64,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const { t } = useLanguage();
   // ============================================
   // STATE MANAGEMENT
   // ============================================
@@ -72,6 +74,8 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   /** Loading state indicator for API calls */
   const [loading, setLoading] = useState(true);
+  /** Mounted state to prevent hydration mismatches */
+  const [mounted, setMounted] = useState(false);
 
   // Pagination state
   /** Current page number (1-indexed) */
@@ -122,6 +126,14 @@ export default function UsersPage() {
   }, [searchQuery]);
 
   /**
+   * Effect: Initialize component (hydration safety)
+   * Prevents hydration mismatches by only rendering interactive components after mount
+   */
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  /**
    * Effect: Fetch users when filters, pagination, or search changes
    * Uses debounced search query to reduce API calls
    */
@@ -164,12 +176,19 @@ export default function UsersPage() {
       const data = await response.json();
 
       // Map users (API already filters for staff)
-      const allUsers = (data.data || []).map((user: any) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role || "User",
-        status: user.status || "active",
+      const allUsers: User[] = (data.data || []).map(
+        (user: {
+          id: string | number;
+          name: string;
+          email: string;
+          role?: string;
+          status?: string;
+        }) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role || 'User',
+          status: user.status || 'active',
       }));
 
       setUsers(allUsers);
@@ -333,11 +352,11 @@ export default function UsersPage() {
               htmlFor="search"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Search by name or email
+              {t.users.searchByNameOrEmail}
             </Label>
             <Input
               id="search"
-              placeholder="Type name or email..."
+              placeholder={t.users.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full"
@@ -350,7 +369,7 @@ export default function UsersPage() {
               htmlFor="role-filter"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Filter by Role
+              {t.users.filterByRole}
             </Label>
             <select
               id="role-filter"
@@ -358,10 +377,10 @@ export default function UsersPage() {
               onChange={(e) => setRoleFilter(e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="user">User</option>
-              <option value="moderator">Moderator</option>
+              <option value="">{t.users.allRoles}</option>
+              <option value="admin">{t.users.admin}</option>
+              <option value="user">{t.users.user}</option>
+              <option value="moderator">{t.users.moderator}</option>
             </select>
           </div>
 
@@ -371,7 +390,7 @@ export default function UsersPage() {
               htmlFor="status-filter"
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Filter by Status
+              {t.users.filterByStatus}
             </Label>
             <select
               id="status-filter"
@@ -379,9 +398,9 @@ export default function UsersPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="">{t.users.allStatuses}</option>
+              <option value="active">{t.common.active}</option>
+              <option value="inactive">{t.common.inactive}</option>
             </select>
           </div>
         </div>
@@ -392,27 +411,28 @@ export default function UsersPage() {
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground mt-2">Manage and view users.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t.users.title}</h1>
+          <p className="text-muted-foreground mt-2">{t.users.subtitle}</p>
         </div>
 
         {/* Create User Dialog */}
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>Add User</Button>
-          </DialogTrigger>
-          <DialogContent
-            className="
+        {mounted ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openCreate}>{t.users.addUser}</Button>
+            </DialogTrigger>
+            <DialogContent
+              className="
     bg-card text-card-foreground
     border border-border
     rounded-xl
     p-6
   "
-          >
+            >
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit User" : "Add User"}</DialogTitle>
+              <DialogTitle>{editing ? t.users.editUser : t.users.addUser}</DialogTitle>
               <DialogDescription>
-                {editing ? "Update user details" : "Create a new user"}
+                {editing ? t.users.updateUser : t.users.createUser}
               </DialogDescription>
             </DialogHeader>
 
@@ -420,7 +440,7 @@ export default function UsersPage() {
             <div className="space-y-4 py-2">
               {/* Name Field */}
               <div className="space-y-1">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t.common.name}</Label>
                 <Input
                   id="name"
                   value={form.name}
@@ -432,7 +452,7 @@ export default function UsersPage() {
 
               {/* Email Field */}
               <div className="space-y-1">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t.common.email}</Label>
                 <Input
                   id="email"
                   value={form.email}
@@ -446,7 +466,7 @@ export default function UsersPage() {
               <div className="grid grid-cols-2 gap-2">
                 {/* Role Field */}
                 <div className="space-y-1">
-                  <Label htmlFor="role">Role</Label>
+                  <Label htmlFor="role">{t.common.role}</Label>
                   <Input
                     id="role"
                     value={form.role}
@@ -458,7 +478,7 @@ export default function UsersPage() {
 
                 {/* Status Dropdown */}
                 <div className="space-y-1">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status">{t.common.status}</Label>
 
                   <Select
                     value={form.status}
@@ -475,14 +495,14 @@ export default function UsersPage() {
                         value="Active"
                         className="text-green-500 focus:text-green-500"
                       >
-                        Active
+                        {t.common.active}
                       </SelectItem>
 
                       <SelectItem
                         value="Inactive"
                         className="text-red-500 focus:text-red-500"
                       >
-                        Inactive
+                        {t.common.inactive}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -495,15 +515,20 @@ export default function UsersPage() {
             <DialogFooter>
               <DialogClose asChild>
                 <Button variant="outline" onClick={() => setOpen(false)}>
-                  Cancel
+                  {t.common.cancel}
                 </Button>
               </DialogClose>
               <Button onClick={submitForm}>
-                {editing ? "Save Changes" : "Create User"}
+                {editing ? t.users.saveChanges : t.users.createUserButton}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        ) : (
+          <Button onClick={openCreate} disabled>
+            {t.users.addUser}
+          </Button>
+        )}
       </div>
 
       {/* ============================================ */}
@@ -517,10 +542,10 @@ export default function UsersPage() {
               <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
             </div>
             <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Loading Users
+              {t.users.loadingUsers}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Please wait while we fetch your users...
+              {t.users.pleaseWaitUsers}
             </p>
           </div>
 
@@ -542,19 +567,19 @@ export default function UsersPage() {
               // === ADDED USER ID COLUMN ===
               {
                 key: "id",
-                label: "ID",
+                label: t.common.id,
                 render: (value) => (
                   <span className="font-mono text-xs bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded">
                     {value}
                   </span>
                 ),
               },
-              { key: "name", label: "Name" },
-              { key: "email", label: "Email" },
-              { key: "role", label: "Role" },
+              { key: "name", label: t.common.name },
+              { key: "email", label: t.common.email },
+              { key: "role", label: t.common.role },
               {
                 key: "status",
-                label: "Status",
+                label: t.common.status,
                 render: (value, row) => (
                   <button
                     onClick={() => toggleStatus(row as User)}
@@ -564,7 +589,7 @@ export default function UsersPage() {
                         : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800"
                     }`}
                   >
-                    {value === "active" ? "Active" : "Inactive"}
+                    {value === "active" ? t.common.active : t.common.inactive}
                   </button>
                 ),
               },
@@ -580,7 +605,7 @@ export default function UsersPage() {
           <div className="flex items-center justify-between mt-4">
             {/* Items Counter */}
             <div className="text-sm text-muted-foreground">
-              Showing {start}–{end} of {total}
+              {t.common.showing} {start}–{end} {t.common.of} {total}
             </div>
 
             {/* Controls */}
@@ -591,11 +616,11 @@ export default function UsersPage() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
-                Prev
+                {t.common.prev}
               </Button>
 
               <div className="px-3 text-sm">
-                Page {page} of {totalPages}
+                {t.common.page} {page} {t.common.of} {totalPages}
               </div>
 
               <Button
@@ -604,7 +629,7 @@ export default function UsersPage() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >
-                Next
+                {t.common.next}
               </Button>
 
               <select

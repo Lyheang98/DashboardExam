@@ -2,30 +2,30 @@
 
 export function setToken(token: string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem("token", token);
+  sessionStorage.setItem("token", token);
 }
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+  return sessionStorage.getItem("token");
 }
 
 export function clearToken() {
   if (typeof window === "undefined") return;
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("user");
   // Clear cookie as well
   document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
 }
 
 export function setUser(user: any) {
   if (typeof window === "undefined") return;
-  localStorage.setItem("user", JSON.stringify(user));
+  sessionStorage.setItem("user", JSON.stringify(user));
 }
 
 export function getUser() {
   if (typeof window === "undefined") return null;
-  const u = localStorage.getItem("user");
+  const u = sessionStorage.getItem("user");
   return u ? JSON.parse(u) : null;
 }
 
