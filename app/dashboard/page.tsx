@@ -6,13 +6,22 @@ import { StatCard } from '@/components/dashboard/Statcard';
 import { DataTable } from '@/components/dashboard/DataTable';
 import { ThemeToggle } from '@/components/dashboard/ThemeToggle';
 import { BarChart, LineChart } from '@/components/dashboard/Chart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function DashboardPage() {
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [usersGran, setUsersGran] = useState<'Day'|'Week'|'Month'>('Month');
-  const [productsGran, setProductsGran] = useState<'Day'|'Week'|'Month'>('Month');
+  const [usersGran, setUsersGran] = useState<'Day'|'Month'|'Year'>('Month');
+  const [productsGran, setProductsGran] = useState<'Day'|'Month'|'Year'>('Month');
+  const [usersYear, setUsersYear] = useState('2025');
+  const [productsYear, setProductsYear] = useState('2025');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,27 +67,32 @@ export default function DashboardPage() {
     return Math.floor(Math.random() * (max - min + 1)) + min
   }
 
-  function generateSeries(gran: 'Day' | 'Week' | 'Month') {
+  function generateSeries(gran: 'Day' | 'Month' | 'Year', year?: string) {
     if (gran === 'Day') {
-      return Array.from({ length: 30 }).map((_, i) => ({ label: `${i + 1}`, value: rand(500, 8000) }))
+      const today = new Date()
+      const currentDay = today.getDate()
+      return Array.from({ length: currentDay }).map((_, i) => ({ label: `${i + 1}`, value: rand(200, 1200) }))
     }
-    if (gran === 'Week') {
-      return Array.from({ length: 12 }).map((_, i) => ({ label: `W${i + 1}`, value: rand(2000, 20000) }))
+    if (gran === 'Month') {
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+      const today = new Date()
+      const currentMonth = today.getMonth()
+      return months.slice(0, currentMonth + 1).map((m) => ({ label: m, value: rand(7000, 80000) }))
     }
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
-    return months.map((m) => ({ label: m, value: rand(7000, 80000) }))
+    const years = ['2025','2026','2027','2028','2029','2030']
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const yearIndex = years.findIndex(y => parseInt(y) === currentYear)
+    return years.slice(0, yearIndex >= 0 ? yearIndex + 1 : years.length).map((y) => ({ label: y, value: rand(50000, 500000) }))
   }
 
-  const usersChartData = useMemo(() => generateSeries(usersGran), [usersGran]);
-  const productsChartData = useMemo(() => generateSeries(productsGran), [productsGran]);
+  const usersChartData = useMemo(() => generateSeries(usersGran, usersYear), [usersGran, usersYear]);
+  const productsChartData = useMemo(() => generateSeries(productsGran, productsYear), [productsGran, productsYear]);
 
   return (
-    <div className="
-  p-2
-  mt-6 sm:mt-4 lg:mt-3
-">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="w-full max-w-full overflow-x-hidden">
+      {/* Stats Cards - First Grid */}
+      <div className="grid mt-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-0 mb-4 sm:mb-5">
         <StatCard
           title="Total Users"
           value={users.length}
@@ -107,6 +121,10 @@ export default function DashboardPage() {
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
+      </div>
+
+      {/* Stats Cards - Second Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 sm:mb-6">
         <StatCard
           title="Schools"
           value={products.filter((p: any) => p.stock > 0).length}
@@ -121,7 +139,7 @@ export default function DashboardPage() {
           icon={TrendingUp}
           trend={{ value: 4, isPositive: true }}
         />
-         <StatCard
+        <StatCard
           title="Districts"
           value={products.filter((p: any) => p.stock > 0).length}
           description="Available products"
@@ -139,19 +157,37 @@ export default function DashboardPage() {
       
 
       {/* Users chart */}
-      <div className="mt-6 sm:mt-4 lg:mt-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold mb-4">Users</h2>
-          <div className="space-x-2">
-            {(['Day','Week','Month'] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setUsersGran(g)}
-                className={`px-3 py-1 rounded-md text-sm ${usersGran === g ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-              >
-                {g}
-              </button>
-            ))}
+      <div className="w-full mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
+          <h2 className="text-lg sm:text-xl font-semibold text-primary">Users</h2>
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <Select value={usersYear} onValueChange={setUsersYear}>
+              <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {['2025','2026','2027','2028','2029','2030'].map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex space-x-1 sm:space-x-2">
+              {(['Day','Month','Year'] as const).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setUsersGran(g)}
+                  className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm transition-colors ${
+                    usersGran === g 
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/85' 
+                      : 'bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         {loading ? (
@@ -162,26 +198,44 @@ export default function DashboardPage() {
       </div>
 
       {/* Products chart */}
-      <div>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold mb-4">Products</h2>
-          <div className="space-x-2">
-            {(['Day','Week','Month'] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setProductsGran(g)}
-                className={`px-3 py-1 rounded-md text-sm ${productsGran === g ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-              >
-                {g}
-              </button>
-            ))}
+      <div className="w-full mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
+          <h2 className="text-lg sm:text-xl font-semibold text-primary">Products</h2>
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <Select value={productsYear} onValueChange={setProductsYear}>
+              <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {['2025','2026','2027','2028','2029','2030'].map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex space-x-1 sm:space-x-2">
+              {(['Day','Month','Year'] as const).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setProductsGran(g)}
+                  className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm transition-colors ${
+                    productsGran === g 
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/85' 
+                      : 'bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Loading...</div>
         ) : (
-          <BarChart data={productsChartData} />
+          <BarChart data={productsChartData} color="#ed932b" />
         )}
       </div>
     </div>

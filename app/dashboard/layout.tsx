@@ -47,10 +47,15 @@ export default function DashboardLayout({
     w-full
     max-w-7xl
     px-4
-    py-4
+    pt-7
+    pb-4
     sm:px-6
-    sm:py-6
-    lg:px-8
+    sm:pt-6
+    sm:pb-6
+    md:pl-6
+    md:pr-4
+    lg:pl-8
+    lg:pr-6
   "
         >
           {children}

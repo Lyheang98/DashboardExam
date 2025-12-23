@@ -54,7 +54,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
           {/* Title */}
           <div className="flex-1 min-w-0">
-            <h1 className="truncate text-base sm:text-xl md:text-2xl font-bold tracking-tight">
+            <h1 className="truncate text-base sm:text-xl md:text-2xl font-bold tracking-tight text-primary">
               MoEYS EdTech Dashboard
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">
