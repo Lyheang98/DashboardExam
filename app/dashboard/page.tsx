@@ -113,7 +113,7 @@ export default function DashboardPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Stats Cards - First Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-0 mb-4 sm:mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-3 mb-4 sm:mb-5">
         <StatCard
           title={t.dashboard.totalUsers}
           value={users.length}
@@ -145,7 +145,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards - Second Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 sm:mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4 sm:mb-6">
         <StatCard
           title={t.dashboard.schools}
           value={inStockCount}

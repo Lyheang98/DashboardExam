@@ -130,8 +130,8 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
                       console.error('Logout API error:', error);
                     }
                     
-                    // Show info toast and redirect (info is best practice for logout)
-                    showToast('Logged out successfully', 'info');
+                    // Show error toast (red) and redirect
+                    showToast('Logged out successfully', 'error');
                     
                     // Small delay to show toast before redirect
                     setTimeout(() => {

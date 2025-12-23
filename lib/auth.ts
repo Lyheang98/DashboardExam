@@ -1,5 +1,10 @@
 "use client";
 
+// Token persistence behavior:
+// - sessionStorage naturally persists across refresh and navigation
+// - sessionStorage automatically clears when tab/window closes
+// No explicit clearing needed - browser handles it automatically
+
 export function setToken(token: string) {
   if (typeof window === "undefined") return;
   sessionStorage.setItem("token", token);

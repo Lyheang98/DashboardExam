@@ -7,19 +7,20 @@
 // - Shows error messages for failed attempts
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { setToken, setUser } from '@/lib/auth';
+import { setToken, setUser, getToken } from '@/lib/auth';
 import { useToast } from '@/components/ui/toast';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { IMAGE_PATHS } from '@/lib/images';
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isRegistered = searchParams.get('registered') === 'true';
   const redirectTo = searchParams.get('redirect') || '/dashboard';
   const { showToast } = useToast();
@@ -30,6 +31,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      router.push(redirectTo);
+    }
+  }, [router, redirectTo]);
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -47,7 +56,7 @@ export default function LoginPage() {
   // Show success toast when redirected from registration
   useEffect(() => {
     if (isRegistered) {
-      showToast('Account created successfully! You can now sign in.', 'success');
+      showToast('Account created! Please sign in.', 'success');
     }
   }, [isRegistered, showToast]);
 
@@ -86,7 +95,7 @@ export default function LoginPage() {
       const text = await res.text();
       
       if (!text) {
-        showToast('Empty response from server. Please try again.', 'error');
+        showToast('Server error. Please try again.', 'error');
         setLoading(false);
         return;
       }
@@ -109,7 +118,7 @@ export default function LoginPage() {
 
       const token = data.token;
       if (!token) {
-        showToast('Invalid response from server. No authentication token received.', 'error');
+        showToast('Invalid response. No token received.', 'error');
         setLoading(false);
         return;
       }
@@ -134,27 +143,27 @@ export default function LoginPage() {
       }
       
       // Show success toast
-      showToast('Login successful! Redirecting...', 'success');
+      showToast('Login successful!', 'success');
       
       // Clear loading state
       setLoading(false);
       
-      // Redirect to the intended destination or dashboard
+      // Redirect to the intended destination or dashboard using Next.js router
       const destination = redirectTo || '/dashboard';
       console.log('[LOGIN] Login successful, redirecting to:', destination);
       
-      // Small delay to show toast before redirect
+      // Quick redirect (toast will show briefly)
       setTimeout(() => {
-        window.location.href = destination;
-      }, 500);
+        router.push(destination);
+      }, 300);
     } catch (err: any) {
       clearTimeout(timeoutId);
       console.error('[LOGIN] Error:', err);
       
-      let errorMsg = 'Network error. Please check your internet connection and try again.';
+      let errorMsg = 'Network error. Please try again.';
       
       if (err.name === 'AbortError') {
-        errorMsg = 'Request timed out. The server is taking too long to respond. Please try again.';
+        errorMsg = 'Request timed out. Please try again.';
       } else if (err?.message) {
         errorMsg = err.message;
       }

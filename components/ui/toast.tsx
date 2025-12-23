@@ -29,10 +29,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     
     setToasts((prev) => [...prev, newToast]);
 
-    // Auto remove after 5 seconds
+    // Auto remove after 2 seconds
     setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
+    }, 2500);
   }, []);
 
   const removeToast = React.useCallback((id: string) => {
@@ -65,7 +65,7 @@ function ToastContainer({
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-full max-w-sm">
+    <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
       ))}
@@ -89,8 +89,8 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-200",
-        isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0",
+        "flex items-start gap-3 rounded-lg border p-4 shadow-sm transition-all duration-200",
+        isVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0",
         toast.type === "success"
           ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
           : toast.type === "error"
