@@ -446,7 +446,7 @@ export default function ProductsPage() {
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-sans font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             {t.products.title}
           </h1>
           <p className="text-muted-foreground mt-2">

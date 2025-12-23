@@ -8,6 +8,11 @@ export interface Translations {
     signedInAs: string;
     help: string;
     logout: string;
+    aboutUs: string;
+    contactUs: string;
+    howToUse: string;
+    privacyPolicy: string;
+    termsConditions: string;
   };
   // Sidebar
   sidebar: {
@@ -165,6 +170,31 @@ export interface Translations {
     pushNotifications: string;
     pushNotificationsDesc: string;
     savePreferences: string;
+    systemConfigurations: string;
+    systemUtilities: string;
+    authenticationSettings: string;
+    firebaseConfigurations: string;
+    paymentSettings: string;
+    adsSettings: string;
+    badgesSettings: string;
+    coinsStoreSettings: string;
+    inAppSettings: string;
+    aboutUs: string;
+    contactUs: string;
+    howToPlay: string;
+    privacyPolicy: string;
+    termsConditions: string;
+    aboutUsTitle: string;
+    aboutUsSubtitle: string;
+    aboutUsParagraph1: string;
+    aboutUsParagraph2: string;
+    aboutUsParagraph3: string;
+    aboutUsParagraph4: string;
+    aboutUsThankYou: string;
+    aboutUsInquiries: string;
+    aboutUsWebsite: string;
+    aboutUsFrom: string;
+    aboutUsSubtitleText: string;
   };
   // DataTable
   table: {
@@ -183,6 +213,11 @@ export const translations: Record<Language, Translations> = {
       signedInAs: 'Signed in as',
       help: 'Help',
       logout: 'Logout',
+      aboutUs: 'About Us',
+      contactUs: 'Contact Us',
+      howToUse: 'How to Use',
+      privacyPolicy: 'Privacy Policy',
+      termsConditions: 'Terms & Conditions',
     },
     sidebar: {
       dashboard: 'Dashboard',
@@ -334,6 +369,31 @@ export const translations: Record<Language, Translations> = {
       pushNotifications: 'Push Notifications',
       pushNotificationsDesc: 'Receive push notifications on your device',
       savePreferences: 'Save Preferences',
+      systemConfigurations: 'System Configurations',
+      systemUtilities: 'System Utilities',
+      authenticationSettings: 'Authentication Settings',
+      firebaseConfigurations: 'Firebase Configurations',
+      paymentSettings: 'Payment Settings',
+      adsSettings: 'Ads. Settings',
+      badgesSettings: 'Badges Settings',
+      coinsStoreSettings: 'Coins Store Settings',
+      inAppSettings: 'In App Settings',
+      aboutUs: 'About Us',
+      contactUs: 'Contact Us',
+      howToPlay: 'How to Play',
+      privacyPolicy: 'Privacy Policy',
+      termsConditions: 'Terms Conditions',
+      aboutUsTitle: 'Welcome to GEIP EdTech',
+      aboutUsSubtitle: 'សូមស្វាគមន៍មកកាន់កម្មវិធី GEIP EdTech',
+      aboutUsParagraph1: 'The GEIP EdTech program aims to enhance self-learning through a digital platform in Cambodia.',
+      aboutUsParagraph2: 'The GEIP EdTech program aims to revolutionize education by enabling students to participate in self-learning through a digital platform and providing access to self-learning worksheets for all 10 secondary school subjects, including Khmer Literature, Mathematics, Biology, Physics, Chemistry, History, Geography, Morals and Civics, and English.',
+      aboutUsParagraph3: 'The Ed-Tech program has been meticulously created to provide a personalized learning experience and transform traditional teaching methods while improving student learning outcomes.',
+      aboutUsParagraph4: 'The Ministry of Education, Youth and Sport, the World Bank, and the Royal University have supported the initiative and participated in creating the GEIP EdTech program to promote education through digitalization.',
+      aboutUsThankYou: 'Thank you for using our platform',
+      aboutUsInquiries: 'For any inquiries, please contact us via: Telegram',
+      aboutUsWebsite: 'Website',
+      aboutUsFrom: 'From Pich Lyheang',
+      aboutUsSubtitleText: 'Learn more about our platform and mission',
     },
     table: {
       actions: 'Actions',
@@ -349,6 +409,11 @@ export const translations: Record<Language, Translations> = {
       signedInAs: 'ចូលជា',
       help: 'ជំនួយ',
       logout: 'ចេញ',
+      aboutUs: 'អំពីយើង',
+      contactUs: 'ទំនាក់ទំនង',
+      howToUse: 'របៀបប្រើប្រាស់',
+      privacyPolicy: 'នយោបាយភាពឯកជន',
+      termsConditions: 'លក្ខខណ្ឌ និងលក្ខខណ្ឌ',
     },
     sidebar: {
       dashboard: 'ផ្ទាំងគ្រប់គ្រង',
@@ -500,6 +565,31 @@ export const translations: Record<Language, Translations> = {
       pushNotifications: 'ការជូនដំណឹង Push',
       pushNotificationsDesc: 'ទទួលការជូនដំណឹង push នៅលើឧបករណ៍របស់អ្នក',
       savePreferences: 'រក្សាទុកចំណូលចិត្ត',
+      systemConfigurations: 'ការកំណត់រចនាសម្ព័ន្ធ',
+      systemUtilities: 'ឧបករណ៍ប្រព័ន្ធ',
+      authenticationSettings: 'ការកំណត់ការផ្ទៀងផ្ទាត់',
+      firebaseConfigurations: 'ការកំណត់ Firebase',
+      paymentSettings: 'ការកំណត់ការទូទាត់',
+      adsSettings: 'ការកំណត់ពាណិជ្ជកម្ម',
+      badgesSettings: 'ការកំណត់សញ្ញាប័ណ្ណ',
+      coinsStoreSettings: 'ការកំណត់ហាងកាក់',
+      inAppSettings: 'ការកំណត់ក្នុងកម្មវិធី',
+      aboutUs: 'អំពីយើង',
+      contactUs: 'ទំនាក់ទំនង',
+      howToPlay: 'របៀបលេង',
+      privacyPolicy: 'នយោបាយភាពឯកជន',
+      termsConditions: 'លក្ខខណ្ឌ',
+      aboutUsTitle: 'សូមស្វាគមន៍មកកាន់កម្មវិធី GEIP EdTech',
+      aboutUsSubtitle: 'Welcome to GEIP EdTech',
+      aboutUsParagraph1: 'កម្មវិធី GEIP EdTech មានគោលបំណងលើកកម្ពស់ការរៀនសូត្រដោយខ្លួនឯងតាមរយៈវេទិកាឌីជីថលក្នុងប្រទេសកម្ពុជា។',
+      aboutUsParagraph2: 'កម្មវិធី GEIP EdTech មានគោលបំណងធ្វើបដិវត្តការអប់រំដោយអនុញ្ញាតឱ្យសិស្សចូលរួមក្នុងការរៀនសូត្រដោយខ្លួនឯងតាមរយៈវេទិកាឌីជីថល និងផ្តល់នូវការចូលប្រើសន្លឹកកិច្ចការរៀនដោយខ្លួនឯងសម្រាប់មុខវិជ្ជាមធ្យមសិក្សាទាំង 10 រួមទាំងអក្សរសាស្ត្រខ្មែរ គណិតវិទ្យា ជីវវិទ្យា រូបវិទ្យា គីមីវិទ្យា ប្រវត្តិវិទ្យា ភូមិវិទ្យា សីលធម៌ និងពលរដ្ឋវិទ្យា និងភាសាអង់គ្លេស។',
+      aboutUsParagraph3: 'កម្មវិធី Ed-Tech ត្រូវបានបង្កើតឡើងយ៉ាងល្អិតល្អន់ដើម្បីផ្តល់នូវបទពិសោធន៍សិក្សាដែលសម្របខ្លួននិងបំប្លែងវិធីសាស្ត្របង្រៀនបែបបុរាណព្រមទាំងបង្កើនលទ្ធផលសិក្សារបស់សិស្ស។',
+      aboutUsParagraph4: 'ក្រសួងអប់រំយុវជននិងកីឡា ធានាគារពិភពលោក(world bank) និង សាកលវិទ្យាល័យភូមិន្ទបានគាំទ្រគំនិតផ្តួចផ្តើមនិងចូលរួមក្នុងការបង្កើត កម្មវិធី GEIP EdTech ដើម្បីជំរុញការអប់រំតាមរយៈឌីជីថលនីយកម្ម។',
+      aboutUsThankYou: 'សូមអរគុណសម្រាប់ការប្រើប្រាស់',
+      aboutUsInquiries: 'បញ្ហាផ្សេងៗទាក់ទងមក: តេឡេក្រាម',
+      aboutUsWebsite: 'គេហទំព័រ',
+      aboutUsFrom: 'ពីខ្ញុំបាទ ពេជ្រ លីហ៊ាង',
+      aboutUsSubtitleText: 'ស្វែងយល់បន្ថែមអំពីវេទិកា និងបេសកកម្មរបស់យើង',
     },
     table: {
       actions: 'សកម្មភាព',

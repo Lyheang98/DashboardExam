@@ -20,27 +20,17 @@ export default function DashboardLayout({
     if (!token) router.push("/login");
   }, [router]);
 
-  // Clear authentication on page unload (when closing browser/tab)
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // Clear the cookie when page unloads
-      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
-
   return (
     <LanguageProvider>
       {/* Sidebar (fixed) */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Header (fixed) */}
-      <Header onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+      <Header 
+        onMenuToggle={() => setSidebarOpen(!sidebarOpen)} 
+        onMenuOpen={() => setSidebarOpen(true)}
+        onMenuClose={() => setSidebarOpen(false)}
+      />
 
       {/* MAIN BODY (ONLY THIS SCROLLS) */}
       <main
