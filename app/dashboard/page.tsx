@@ -19,18 +19,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Users, Package, TrendingUp, DollarSign } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
-import { BarChart } from '@/components/dashboard/Chart';
-import { GranularityButtons } from '@/components/dashboard/GranularityButtons';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/context';
-import { DashboardUser, DashboardProduct, Granularity, ChartDataPoint } from './types';
-import { fetchDashboardData, generateChartSeries } from './utils';
+import { logger } from '@/lib/logger';
+import { DashboardUser, DashboardProduct, Granularity } from './types';
+import { fetchDashboardData } from './utils';
+import { ChartSection } from './components/ChartSection';
 
 // Constants
 const AVAILABLE_YEARS = ['2025', '2026', '2027', '2028', '2029', '2030'] as const;
@@ -55,17 +48,42 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
-  // Fetch dashboard data on mount
+  // Fetch dashboard data on mount with cancellation support
   useEffect(() => {
+    const controller = new AbortController();
+    let isMounted = true;
+    
     const loadData = async () => {
-      setLoading(true);
-      const { users: fetchedUsers, products: fetchedProducts } = await fetchDashboardData();
-      setUsers(fetchedUsers);
-      setProducts(fetchedProducts);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const { users: fetchedUsers, products: fetchedProducts } = await fetchDashboardData(controller.signal);
+        
+        // Only update state if component is still mounted and request wasn't cancelled
+        if (isMounted && !controller.signal.aborted) {
+          setUsers(fetchedUsers);
+          setProducts(fetchedProducts);
+        }
+      } catch (error: any) {
+        // Don't update state if request was aborted
+        if (isMounted && error?.name !== 'AbortError') {
+          logger.error('Failed to load dashboard data', 'DASHBOARD', error);
+          setUsers([]);
+          setProducts([]);
+        }
+      } finally {
+        if (isMounted && !controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
     };
 
     loadData();
+
+    // Cleanup: cancel request if component unmounts or dependencies change
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, []);
 
   // Get translated month names
@@ -87,27 +105,22 @@ export default function DashboardPage() {
     [t]
   );
 
-  // Generate chart data with translations
-  const usersChartData = useMemo<ChartDataPoint[]>(
-    () => generateChartSeries(usersGran, usersYear, monthNames),
-    [usersGran, usersYear, monthNames]
-  );
-
-  const productsChartData = useMemo<ChartDataPoint[]>(
-    () => generateChartSeries(productsGran, productsYear, monthNames),
-    [productsGran, productsYear, monthNames]
-  );
-
-  // Calculate derived statistics
-  const averagePrice = useMemo(() => {
-    if (products.length === 0) return 0;
-    const total = products.reduce((sum, p) => sum + p.price, 0);
-    return total / products.length;
+  // Calculate derived statistics (limit data processing for performance)
+  const MAX_STATS_ITEMS = 1000; // Only process first 1000 items for stats
+  
+  const limitedProducts = useMemo(() => {
+    return products.slice(0, MAX_STATS_ITEMS);
   }, [products]);
 
+  const averagePrice = useMemo(() => {
+    if (limitedProducts.length === 0) return 0;
+    const total = limitedProducts.reduce((sum, p) => sum + p.price, 0);
+    return total / limitedProducts.length;
+  }, [limitedProducts]);
+
   const inStockCount = useMemo(
-    () => products.filter((p) => p.stock > 0).length,
-    [products]
+    () => limitedProducts.filter((p) => p.stock > 0).length,
+    [limitedProducts]
   );
 
   return (
@@ -177,84 +190,40 @@ export default function DashboardPage() {
       </div>
       
 
-      {/* Users chart */}
-      <div className="w-full mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
-          <h2 className="text-lg sm:text-xl font-semibold text-primary">{t.dashboard.users}</h2>
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            {mounted ? (
-              <Select value={usersYear} onValueChange={setUsersYear}>
-                <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_YEARS.map((year) => (
-                    <SelectItem key={year} value={year}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="w-20 sm:w-24 h-9 border rounded-md bg-background" />
-            )}
-            <GranularityButtons
-              value={usersGran}
-              onChange={setUsersGran}
-              translations={{
-                day: t.dashboard.day,
-                month: t.dashboard.month,
-                year: t.dashboard.year,
-              }}
-            />
-          </div>
-        </div>
-        {loading ? (
-          <div className="text-center py-8 text-muted-foreground">{t.dashboard.loading}</div>
-        ) : (
-          <BarChart data={usersChartData} />
-        )}
-      </div>
+      {/* Users Chart */}
+      <ChartSection
+        title={t.dashboard.users}
+        granularity={usersGran}
+        year={usersYear}
+        onGranularityChange={setUsersGran}
+        onYearChange={setUsersYear}
+        monthNames={monthNames}
+        availableYears={AVAILABLE_YEARS}
+        mounted={mounted}
+        translations={{
+          day: t.dashboard.day,
+          month: t.dashboard.month,
+          year: t.dashboard.year,
+        }}
+      />
 
-      {/* Products chart */}
-      <div className="w-full mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3 sm:gap-0">
-          <h2 className="text-lg sm:text-xl font-semibold text-primary">{t.dashboard.products}</h2>
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            {mounted ? (
-              <Select value={productsYear} onValueChange={setProductsYear}>
-                <SelectTrigger className="w-20 sm:w-24 text-xs sm:text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_YEARS.map((year) => (
-                    <SelectItem key={year} value={year}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="w-20 sm:w-24 h-9 border rounded-md bg-background" />
-            )}
-            <GranularityButtons
-              value={productsGran}
-              onChange={setProductsGran}
-              translations={{
-                day: t.dashboard.day,
-                month: t.dashboard.month,
-                year: t.dashboard.year,
-              }}
-            />
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-8 text-muted-foreground">{t.dashboard.loading}</div>
-        ) : (
-          <BarChart data={productsChartData} color="#ed932b" />
-        )}
-      </div>
+      {/* Products Chart */}
+      <ChartSection
+        title={t.dashboard.products}
+        granularity={productsGran}
+        year={productsYear}
+        onGranularityChange={setProductsGran}
+        onYearChange={setProductsYear}
+        monthNames={monthNames}
+        availableYears={AVAILABLE_YEARS}
+        mounted={mounted}
+        color="#ed932b"
+        translations={{
+          day: t.dashboard.day,
+          month: t.dashboard.month,
+          year: t.dashboard.year,
+        }}
+      />
     </div>
   );
 }

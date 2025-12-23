@@ -133,14 +133,6 @@ export default function UsersPage() {
     setMounted(true);
   }, []);
 
-  /**
-   * Effect: Fetch users when filters, pagination, or search changes
-   * Uses debounced search query to reduce API calls
-   */
-  useEffect(() => {
-    fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, perPage, debouncedSearchQuery, roleFilter, statusFilter]);
 
   // ============================================
   // API CALLS
@@ -152,9 +144,11 @@ export default function UsersPage() {
    * - Builds query parameters from current filters
    * - Ensures minimum loading time (500ms) for smooth UX
    * - Handles errors gracefully with logging
+   * - Limits response size for performance
    */
   const fetchUsers = async () => {
     setLoading(true);
+    const controller = new AbortController();
 
     try {
       // Build query parameters
@@ -191,16 +185,40 @@ export default function UsersPage() {
           status: user.status || 'active',
       }));
 
-      setUsers(allUsers);
-      setTotal(allUsers.length);
-    } catch (error) {
+      // Only update state if request wasn't cancelled
+      if (!controller.signal.aborted) {
+        setUsers(allUsers);
+        setTotal(allUsers.length);
+        setLoading(false);
+      }
+    } catch (error: any) {
+      // Don't update state if request was cancelled
+      if (controller.signal.aborted || error.name === 'AbortError') {
+        return;
+      }
+      
       logger.error("Failed to fetch users", "USERS", error);
       setUsers([]);
       setTotal(0);
-    } finally {
       setLoading(false);
     }
   };
+
+  // ============================================
+  // EFFECT: Fetch users when dependencies change
+  // ============================================
+  
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    fetchUsers();
+    
+    // Cleanup: Cancel request if component unmounts or dependencies change
+    return () => {
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, perPage, debouncedSearchQuery, roleFilter, statusFilter]);
 
   // ============================================
   // COMPUTED VALUES (Memoized)

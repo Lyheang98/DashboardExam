@@ -126,7 +126,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               const Icon = item.icon;
 
               return (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.href} href={item.href} prefetch={true}>
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-2 hover:bg-primary/20 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary"
@@ -174,7 +174,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <div className="ml-4 space-y-1 border-l pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   {settingsMenuItems.map((item) => {
                     return (
-                      <Link key={item.id} href={item.href}>
+                      <Link key={item.id} href={item.href} prefetch={true}>
                         <button
                           onClick={onClose}
                           className={cn(

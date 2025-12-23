@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, memo, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -40,7 +40,7 @@ export interface DataTableProps<T> {
   onDelete?: (row: T) => void;
 }
 
-export function DataTable<T extends { id: string | number }>({
+function DataTableComponent<T extends { id: string | number }>({
   columns,
   data,
   onEdit,
@@ -50,10 +50,60 @@ export function DataTable<T extends { id: string | number }>({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<T | null>(null);
 
-  const handleDeleteClick = (row: T) => {
+  const handleDeleteClick = useCallback((row: T) => {
     setRowToDelete(row);
     setDeleteConfirmOpen(true);
-  };
+  }, []);
+
+  // Memoize columns to prevent re-renders
+  const tableHeaders = useMemo(() => {
+    return columns.map((column) => (
+      <TableHead key={String(column.key)} className="font-semibold">
+        {column.label}
+      </TableHead>
+    ));
+  }, [columns]);
+
+  // Memoize rows to prevent unnecessary re-renders
+  const tableRows = useMemo(() => {
+    return data.map((row) => (
+      <TableRow key={row.id}>
+        {columns.map((column) => (
+          <TableCell key={String(column.key)}>
+            {column.render
+              ? column.render(row[column.key], row)
+              : String(row[column.key])}
+          </TableCell>
+        ))}
+        {(onEdit || onDelete) && (
+          <TableCell>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(row)}>
+                    {t.table.edit}
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem
+                    onClick={() => handleDeleteClick(row)}
+                    className="text-destructive"
+                  >
+                    {t.table.delete}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TableCell>
+        )}
+      </TableRow>
+    ));
+  }, [data, columns, onEdit, onDelete, t, handleDeleteClick]);
 
   const handleConfirmDelete = () => {
     if (rowToDelete && onDelete) {
@@ -75,11 +125,7 @@ export function DataTable<T extends { id: string | number }>({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            {columns.map((column) => (
-              <TableHead key={String(column.key)} className="font-semibold">
-                {column.label}
-              </TableHead>
-            ))}
+            {tableHeaders}
             {(onEdit || onDelete) && <TableHead>{t.table.actions}</TableHead>}
           </TableRow>
         </TableHeader>
@@ -94,43 +140,7 @@ export function DataTable<T extends { id: string | number }>({
               </TableCell>
             </TableRow>
           ) : (
-            data.map((row) => (
-              <TableRow key={row.id}>
-                {columns.map((column) => (
-                  <TableCell key={String(column.key)}>
-                    {column.render
-                      ? column.render(row[column.key], row)
-                      : String(row[column.key])}
-                  </TableCell>
-                ))}
-                {(onEdit || onDelete) && (
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {onEdit && (
-                          <DropdownMenuItem onClick={() => onEdit(row)}>
-                            {t.table.edit}
-                          </DropdownMenuItem>
-                        )}
-                        {onDelete && (
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteClick(row)}
-                            className="text-destructive"
-                          >
-                            {t.table.delete}
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))
+            tableRows
           )}
         </TableBody>
       </Table>
@@ -157,3 +167,6 @@ export function DataTable<T extends { id: string | number }>({
     </div>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const DataTable = memo(DataTableComponent) as typeof DataTableComponent;
