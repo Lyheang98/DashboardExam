@@ -154,13 +154,10 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 }, 200);
               }}
             >
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setIsSettingsExpanded(!isSettingsExpanded)}
-                className={cn(
-                  "w-full flex items-center justify-between h-9 px-4 rounded-md text-sm font-medium",
-                  "transition-colors duration-200 ease-in-out",
-                  "hover:bg-primary/20 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary text-foreground"
-                )}
+                className="w-full justify-between hover:bg-primary/20 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary"
               >
                 <div className="flex items-center gap-2">
                   <Settings className="h-4 w-4" />
@@ -170,7 +167,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                   "h-4 w-4 transition-transform duration-200 ease-in-out",
                   isSettingsExpanded && "rotate-180"
                 )} />
-              </button>
+              </Button>
 
               {/* Settings Submenu */}
               {isSettingsExpanded && (

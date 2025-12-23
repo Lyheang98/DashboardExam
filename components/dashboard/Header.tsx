@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { clearToken, getUser } from "@/lib/auth";
 import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/components/ui/toast";
+import { useLanguage } from "@/lib/i18n/context";
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -31,6 +32,7 @@ interface HeaderProps {
 export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [userName, setUserName] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,10 +73,10 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
           {/* Title */}
           <div className="flex-1 min-w-0 pr-2">
             <h1 className="text-base sm:text-xl md:text-2xl font-bold tracking-tight text-primary">
-              MoEYS EdTech Dashboard
+              {t.header.title}
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">
-              Monitor and manage your educational platform
+              {t.header.subtitle}
             </p>
           </div>
         </div>
@@ -100,12 +102,12 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
                 {userName && (
                   <>
                     <div className="px-2 py-1 text-xs text-muted-foreground">
-                      Signed in as
+                      {t.header.signedInAs}
                     </div>
                     <DropdownMenuItem>{userName}</DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuItem>Help</DropdownMenuItem>
+                <DropdownMenuItem>{t.header.help}</DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={async () => {
                     // Clear local storage first
@@ -139,7 +141,7 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
                   className="text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  Logout
+                  {t.header.logout}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

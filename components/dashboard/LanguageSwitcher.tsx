@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useLanguage } from '@/lib/i18n/context';
-import { AVAILABLE_LANGUAGES } from './LanguageSwitcher.constants';
+import { AVAILABLE_LANGUAGES } from '@/lib/i18n/languages';
 
 export function LanguageSwitcher() {
   const { language, setLanguage } = useLanguage();

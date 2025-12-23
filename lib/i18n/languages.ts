@@ -1,7 +1,7 @@
 /**
- * Language Switcher Constants
+ * Language Options Configuration
  * 
- * Centralized configuration for available languages
+ * Centralized configuration for available languages with display names
  */
 
 import { Language } from '@/lib/i18n/translations';
