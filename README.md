@@ -158,6 +158,22 @@ Response flows back through layers
     ↓
 Frontend displays users in table
 
+* Difference between the three buttons:*
+- Refresh Data (blue)
+  Clears the schools cache specifically
+  Immediately fetches fresh schools data
+  Updates the display with new data
+- Warm Cache (green)
+  Pre-fetches schools data
+  Stores it in cache for 5 minutes
+  Makes subsequent loads faster
+  Does not change the current display
+- Clear Cache (orange) — now updated
+  Clears all cached data (not just schools)
+  Immediately fetches fresh data
+  Updates the display with new data
+  Useful when you want to reset everything and see the latest data
+
 ## Tech Stack
 
 - Next.js 14 (App Router)
