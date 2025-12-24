@@ -47,7 +47,7 @@ interface School {
 }
 
 export default function SchoolsPage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   // ============================================
   // STATE MANAGEMENT
   // ============================================
@@ -218,43 +218,47 @@ export default function SchoolsPage() {
   const columns: DataTableColumn<School>[] = useMemo(() => [
     { 
       key: 'school_name', 
-      label: 'School Name',
-      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
+      label: t.schools.schoolName,
+      render: (value) => value ? <span className={language === 'km' ? 'font-khmer' : ''}>{value}</span> : '-',
     },
     {
       key: 'province_name',
-      label: 'Province',
-      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
+      label: t.schools.province,
+      render: (value) => value ? (
+        <span className={`text-primary font-semibold ${language === 'km' ? 'font-khmer' : ''}`}>
+          {value}
+        </span>
+      ) : '-',
     },
     {
       key: 'district_name',
-      label: 'District',
-      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
+      label: t.schools.district,
+      render: (value) => value ? <span className={language === 'km' ? 'font-khmer' : ''}>{value}</span> : '-',
     },
     {
       key: 'school_type_h',
-      label: 'School Type',
-      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
+      label: t.schools.schoolType,
+      render: (value) => value ? <span className={language === 'km' ? 'font-khmer' : ''}>{value}</span> : '-',
     },
     {
       key: 'is_target',
-      label: 'Target Status',
+      label: t.schools.targetStatus,
       render: (value, row) => {
         const isTarget = row.is_target === true || row.target === true;
         return (
           <span
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
+            className={`px-3 py-1 rounded-full text-sm font-medium ${language === 'km' ? 'font-khmer' : ''} ${
               isTarget
                 ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
             }`}
           >
-            {isTarget ? "Target" : "Non-Target"}
+            {isTarget ? t.schools.target : t.schools.nonTarget}
           </span>
         );
       },
     },
-  ], []);
+  ], [t, language]);
 
   return (
     <div className="space-y-6">
@@ -262,9 +266,9 @@ export default function SchoolsPage() {
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
       <div className="
-  bg-white dark:bg-slate-900
+  bg-white dark:bg-card
   rounded-lg
-  border border-gray-200 dark:border-slate-700
+  border border-gray-200 dark:border-border
   p-6 shadow-sm
   mt-6 sm:mt-4 lg:mt-3
 ">
@@ -280,16 +284,16 @@ export default function SchoolsPage() {
           <div className="space-y-2">
             <Label
               htmlFor="search"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 font-khmer"
+              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              Search by Name
+              {t.schools.searchByName}
             </Label>
             <Input
               id="search"
-              placeholder="Search schools..."
+              placeholder={t.schools.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full font-khmer"
+              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
             />
           </div>
 
@@ -297,19 +301,19 @@ export default function SchoolsPage() {
           <div className="space-y-2">
             <Label
               htmlFor="province-filter"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 font-khmer"
+              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              Province
+              {t.schools.province}
             </Label>
             <select
               id="province-filter"
               value={provinceFilter}
               onChange={(e) => setProvinceFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
+              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              <option value="" className="font-khmer">All Provinces</option>
+              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allProvinces}</option>
               {provinceList.map((province) => (
-                <option key={province.name} value={province.name} className="font-khmer">
+                <option key={province.name} value={province.name} className={language === 'km' ? 'font-khmer' : ''}>
                   {province.name} ({province.count})
                 </option>
               ))}
@@ -320,16 +324,16 @@ export default function SchoolsPage() {
           <div className="space-y-2">
             <Label
               htmlFor="district-filter"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 font-khmer"
+              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              District
+              {t.schools.district}
             </Label>
             <Input
               id="district-filter"
-              placeholder="Filter by district..."
+              placeholder={`${t.common.filter} ${t.schools.district.toLowerCase()}...`}
               value={districtFilter}
               onChange={(e) => setDistrictFilter(e.target.value)}
-              className="w-full font-khmer"
+              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
             />
           </div>
 
@@ -337,19 +341,19 @@ export default function SchoolsPage() {
           <div className="space-y-2">
             <Label
               htmlFor="school-type-filter"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 font-khmer"
+              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              School Type
+              {t.schools.schoolType}
             </Label>
             <select
               id="school-type-filter"
               value={schoolTypeFilter}
               onChange={(e) => setSchoolTypeFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
+              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              <option value="" className="font-khmer">All Types</option>
+              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allTypes}</option>
               {uniqueSchoolTypes.map((type) => (
-                <option key={type} value={type} className="font-khmer">
+                <option key={type} value={type} className={language === 'km' ? 'font-khmer' : ''}>
                   {type}
                 </option>
               ))}
@@ -360,19 +364,19 @@ export default function SchoolsPage() {
           <div className="space-y-2">
             <Label
               htmlFor="target-filter"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              Target Status
+              {t.schools.targetStatus}
             </Label>
             <select
               id="target-filter"
               value={targetFilter}
               onChange={(e) => setTargetFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              <option value="">All Schools</option>
-              <option value="true">Target Schools</option>
-              <option value="false">Non-Target Schools</option>
+              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allSchools}</option>
+              <option value="true" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.targetSchools}</option>
+              <option value="false" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.nonTargetSchools}</option>
             </select>
           </div>
         </div>
@@ -383,11 +387,11 @@ export default function SchoolsPage() {
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Schools
+          <h1 className={`text-2xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {t.schools.title}
           </h1>
-          <p className="text-muted-foreground mt-2">
-            Manage and view all schools ({total} total)
+          <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
+            {t.schools.manageAndView} ({total} {t.schools.total})
           </p>
         </div>
       </div>

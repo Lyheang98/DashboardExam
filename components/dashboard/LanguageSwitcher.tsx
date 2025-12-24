@@ -27,6 +27,7 @@ import { AVAILABLE_LANGUAGES } from '@/lib/i18n/languages';
 export function LanguageSwitcher() {
   const { language, setLanguage } = useLanguage();
   const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -52,18 +53,25 @@ export function LanguageSwitcher() {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 
           size="icon" 
-          className="relative" 
+          className="relative group transition-colors hover:bg-accent" 
           aria-label={`Current language: ${currentLanguage.name}. Click to change language.`}
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
         >
-          <Languages className="h-5 w-5" />
+          <Languages className="h-5 w-5 transition-colors group-hover:text-primary" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent 
+        align="end" 
+        className="w-40"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
         {AVAILABLE_LANGUAGES.map((lang) => {
           const isActive = lang.code === language;
           
@@ -71,7 +79,7 @@ export function LanguageSwitcher() {
             <DropdownMenuItem
               key={lang.code}
               onClick={() => handleLanguageChange(lang.code)}
-              className={isActive ? 'bg-accent' : ''}
+              className={`transition-colors ${isActive ? 'bg-accent' : 'hover:bg-accent/50'}`}
               aria-selected={isActive}
             >
               <div className="flex flex-col" style={{ fontFamily: lang.code === 'km' ? 'var(--font-kantumruy-pro)' : 'inherit' }}>

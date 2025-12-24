@@ -19,9 +19,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Users, Package, TrendingUp, DollarSign, School } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
+import { DataControls } from '@/components/dashboard/DataControls';
 import { useLanguage } from '@/lib/i18n/context';
 import { logger } from '@/lib/logger';
 import { getToken } from '@/lib/auth';
+import { dataCache, CACHE_KEYS } from '@/lib/cache/dataCache';
+import { cacheHandlers } from '@/lib/cache/cacheHandlers';
 import { DashboardUser, DashboardProduct, Granularity } from './types';
 import { fetchDashboardData } from './utils';
 import { ChartSection } from './components/ChartSection';
@@ -43,6 +46,7 @@ export default function DashboardPage() {
   const [geipSchools, setGeipSchools] = useState<number>(0);
   const [geipAFSchools, setGeipAFSchools] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0); // Force refresh trigger
   const [usersGran, setUsersGran] = useState<Granularity>(DEFAULT_GRANULARITY);
   const [productsGran, setProductsGran] = useState<Granularity>(DEFAULT_GRANULARITY);
   const [usersYear, setUsersYear] = useState(DEFAULT_YEAR);
@@ -92,19 +96,42 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Fetch schools total count
+  // Fetch schools total count with caching
   useEffect(() => {
     if (!mounted) return; // Wait for component to mount
     
     const controller = new AbortController();
     let isMounted = true;
 
-    const fetchSchoolsCount = async () => {
+    const fetchSchoolsCount = async (forceRefresh = false) => {
       try {
         const token = getToken();
         if (!token) {
           logger.warn('No token available for schools fetch', 'DASHBOARD');
           return;
+        }
+
+        // Check cache first (unless force refresh)
+        if (!forceRefresh) {
+          const cached = dataCache.get<{
+            total: number;
+            target: number;
+            notTarget: number;
+            geipSchool: number;
+            geipAF: number;
+          }>(CACHE_KEYS.SCHOOLS_COUNT);
+          
+          if (cached) {
+            logger.info('Using cached schools count', 'DASHBOARD');
+            if (isMounted && !controller.signal.aborted) {
+              setTotalSchools(cached.total);
+              setTargetSchools(cached.target);
+              setNotTargetSchools(cached.notTarget);
+              setGeipSchools(cached.geipSchool);
+              setGeipAFSchools(cached.geipAF);
+            }
+            return;
+          }
         }
 
         const response = await fetch('/api/schools', {
@@ -124,12 +151,23 @@ export default function DashboardPage() {
 
         if (isMounted && !controller.signal.aborted) {
           if (data.success) {
-            setTotalSchools(data.total || 0);
-            setTargetSchools(data.target || 0);
-            setNotTargetSchools(data.notTarget || 0);
-            setGeipSchools(data.geipSchool || 0);
-            setGeipAFSchools(data.geipAF || 0);
-            logger.info(`Schools count fetched: Total=${data.total}, Target=${data.target}, NotTarget=${data.notTarget}, GEIP=${data.geipSchool}, GEIP AF=${data.geipAF}`, 'DASHBOARD');
+            const schoolsData = {
+              total: data.total || 0,
+              target: data.target || 0,
+              notTarget: data.notTarget || 0,
+              geipSchool: data.geipSchool || 0,
+              geipAF: data.geipAF || 0,
+            };
+            
+            // Cache the data (5 minute TTL)
+            dataCache.set(CACHE_KEYS.SCHOOLS_COUNT, schoolsData, 5 * 60 * 1000);
+            
+            setTotalSchools(schoolsData.total);
+            setTargetSchools(schoolsData.target);
+            setNotTargetSchools(schoolsData.notTarget);
+            setGeipSchools(schoolsData.geipSchool);
+            setGeipAFSchools(schoolsData.geipAF);
+            logger.info(`Schools count fetched: Total=${schoolsData.total}, Target=${schoolsData.target}, NotTarget=${schoolsData.notTarget}, GEIP=${schoolsData.geipSchool}, GEIP AF=${schoolsData.geipAF}`, 'DASHBOARD');
           } else {
             logger.error('Schools API returned error', 'DASHBOARD', new Error(data.error || 'Unknown error'));
             setTotalSchools(0);
@@ -157,7 +195,65 @@ export default function DashboardPage() {
       isMounted = false;
       controller.abort();
     };
-  }, [mounted]);
+  }, [mounted, refreshKey]);
+
+  // Handler for refresh button
+  const handleRefresh = () => {
+    // Clear cache first
+    dataCache.delete(CACHE_KEYS.SCHOOLS_COUNT);
+    // Trigger re-fetch
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // Handler for warm cache button
+  const handleWarmCache = async () => {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      // Pre-fetch schools count
+      const response = await fetch('/api/schools', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          dataCache.set(CACHE_KEYS.SCHOOLS_COUNT, {
+            total: data.total || 0,
+            target: data.target || 0,
+            notTarget: data.notTarget || 0,
+            geipSchool: data.geipSchool || 0,
+            geipAF: data.geipAF || 0,
+          }, 5 * 60 * 1000);
+        }
+      }
+    } catch (error) {
+      console.error('Warm cache error:', error);
+    }
+  };
+
+  // Handler for clear cache button
+  const handleClearCache = () => {
+    // Clear all cache
+    dataCache.clear();
+    // Trigger refresh to fetch fresh data immediately
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // Register handlers globally so Header can access them
+  useEffect(() => {
+    cacheHandlers.setRefreshHandler(handleRefresh);
+    cacheHandlers.setWarmCacheHandler(handleWarmCache);
+    cacheHandlers.setClearCacheHandler(handleClearCache);
+
+    return () => {
+      cacheHandlers.clearHandlers();
+    };
+  }, [refreshKey]); // Re-register when refreshKey changes
 
   // Get translated month names
   const monthNames = useMemo(

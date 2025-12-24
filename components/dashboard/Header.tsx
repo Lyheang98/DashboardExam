@@ -11,6 +11,7 @@ import { Menu, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/dashboard/ThemeToggle";
 import { LanguageSwitcher } from "@/components/dashboard/LanguageSwitcher";
+import { DataControls } from "@/components/dashboard/DataControls";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
   const { t } = useLanguage();
   const [userName, setUserName] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b" style={{ backgroundColor: 'var(--color-header)', color: 'var(--color-header-foreground)', borderColor: 'var(--color-header-border)' }}>
       <div className="flex h-20 items-center justify-between px-2 md:px-4 lg:px-6">
         {/* LEFT */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -89,25 +91,38 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
           {/* Theme Toggle */}
           <ThemeToggle />
           
+          {/* Data Controls */}
+          <DataControls />
 
           {/* User & Settings */}
           {mounted && (
-            <DropdownMenu>
+            <DropdownMenu open={settingsOpen} onOpenChange={setSettingsOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Settings className="h-4 w-4" />
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="group transition-colors hover:bg-accent"
+                  onMouseEnter={() => setSettingsOpen(true)}
+                  onMouseLeave={() => setSettingsOpen(false)}
+                >
+                  <Settings className="h-4 w-4 transition-colors group-hover:text-primary" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuContent 
+                align="end" 
+                className="w-44"
+                onMouseEnter={() => setSettingsOpen(true)}
+                onMouseLeave={() => setSettingsOpen(false)}
+              >
                 {userName && (
                   <>
                     <div className="px-2 py-1 text-xs text-muted-foreground">
                       {t.header.signedInAs}
                     </div>
-                    <DropdownMenuItem>{userName}</DropdownMenuItem>
+                    <DropdownMenuItem className="hover:bg-accent/50 transition-colors">{userName}</DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuItem>{t.header.help}</DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-accent/50 transition-colors">{t.header.help}</DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={async () => {
                     // Clear local storage first
@@ -138,7 +153,7 @@ export function Header({ onMenuToggle, onMenuOpen, onMenuClose }: HeaderProps) {
                       router.push("/login");
                     }, 300);
                   }}
-                  className="text-destructive"
+                  className="text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20 transition-colors"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   {t.header.logout}

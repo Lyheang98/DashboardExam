@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Documentation (don't expose architecture details)
+README.md
+PERFORMANCE_GUIDE.md

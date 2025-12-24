@@ -204,6 +204,27 @@ export interface Translations {
     delete: string;
     noDataAvailable: string;
   };
+  // Schools Page
+  schools: {
+    title: string;
+    subtitle: string;
+    searchByName: string;
+    searchPlaceholder: string;
+    province: string;
+    district: string;
+    schoolType: string;
+    targetStatus: string;
+    allProvinces: string;
+    allTypes: string;
+    allSchools: string;
+    targetSchools: string;
+    nonTargetSchools: string;
+    manageAndView: string;
+    total: string;
+    schoolName: string;
+    target: string;
+    nonTarget: string;
+  };
 }
 
 export const translations: Record<Language, Translations> = {
@@ -403,6 +424,26 @@ export const translations: Record<Language, Translations> = {
       delete: 'Delete',
       noDataAvailable: 'No data available',
     },
+    schools: {
+      title: 'Schools',
+      subtitle: 'Manage and view all schools',
+      searchByName: 'Search by Name',
+      searchPlaceholder: 'Search schools...',
+      province: 'Province',
+      district: 'District',
+      schoolType: 'School Type',
+      targetStatus: 'Target Status',
+      allProvinces: 'All Provinces',
+      allTypes: 'All Types',
+      allSchools: 'All Schools',
+      targetSchools: 'Target Schools',
+      nonTargetSchools: 'Non-Target Schools',
+      manageAndView: 'Manage and view all schools',
+      total: 'total',
+      schoolName: 'School Name',
+      target: 'Target',
+      nonTarget: 'Non-Target',
+    },
   },
   km: {
     header: {
@@ -599,6 +640,26 @@ export const translations: Record<Language, Translations> = {
       edit: 'កែប្រែ',
       delete: 'លុប',
       noDataAvailable: 'គ្មានទិន្នន័យ',
+    },
+    schools: {
+      title: 'សាលា',
+      subtitle: 'គ្រប់គ្រង និងមើលសាលាទាំងអស់',
+      searchByName: 'ស្វែងរកតាមឈ្មោះ',
+      searchPlaceholder: 'ស្វែងរកសាលា...',
+      province: 'ខេត្ត',
+      district: 'ស្រុក',
+      schoolType: 'ប្រភេទសាលា',
+      targetStatus: 'ស្ថានភាពគោលដៅ',
+      allProvinces: 'ខេត្តទាំងអស់',
+      allTypes: 'ប្រភេទទាំងអស់',
+      allSchools: 'សាលាទាំងអស់',
+      targetSchools: 'សាលាគោលដៅ',
+      nonTargetSchools: 'សាលាមិនមែនគោលដៅ',
+      manageAndView: 'គ្រប់គ្រង និងមើលសាលាទាំងអស់',
+      total: 'សរុប',
+      schoolName: 'ឈ្មោះសាលា',
+      target: 'គោលដៅ',
+      nonTarget: 'មិនមែនគោលដៅ',
     },
   },
 };

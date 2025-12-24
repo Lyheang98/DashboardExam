@@ -44,36 +44,43 @@
   --sidebar-foreground: oklch(0.25 0.05 250);
   --sidebar-border: oklch(0.90 0.01 250);
   --sidebar-ring: oklch(0.40 0.15 250);
+
+  /* Header (light) */
+  --header: oklch(1 0 0);
+  --header-foreground: oklch(0.25 0.05 250);
+  --header-border: oklch(0.90 0.01 250);
 }
 
 /* ================================
    DARK MODE (DASHBOARD OPTIMIZED)
    ================================ */
 .dark {
-  /* Custom dashboard base */
-  --dashboard-dark: #1E2535;
+  /* Use slate-900 color (#0f172a) for consistency with filter */
+  --dashboard-dark: #0f172a;
 
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  /* Body background - stronger black */
+  --background: #000000;
+  --foreground: oklch(1 0 0);
 
-  /* Cards use dashboard dark */
-  --card: var(--dashboard-dark);
-  --card-foreground: oklch(0.985 0 0);
+  /* Cards - same as filter (slate-900) */
+  --card: #0f172a;
+  --card-foreground: oklch(1 0 0);
 
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --popover: #0f172a;
+  --popover-foreground: oklch(1 0 0);
 
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  /* Primary - white for titles */
+  --primary: oklch(1 0 0);
+  --primary-foreground: #0f172a;
 
   --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
+  --secondary-foreground: oklch(1 0 0);
 
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
 
   --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --accent-foreground: oklch(1 0 0);
 
   --destructive: oklch(0.704 0.191 22.216);
 
@@ -81,11 +88,16 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
 
-  /* Sidebar matches dashboard */
-  --sidebar: var(--dashboard-dark);
-  --sidebar-foreground: oklch(0.985 0 0);
+  /* Sidebar - same as filter (slate-900) */
+  --sidebar: #0f172a;
+  --sidebar-foreground: oklch(1 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Header - darker charcoal/black color */
+  --header: #1a1a1a;
+  --header-foreground: oklch(1 0 0);
+  --header-border: oklch(1 0 0 / 10%);
 }
 
 /* ================================
@@ -123,6 +135,10 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
+  --color-header-border: var(--header-border);
 
   --font-sans: var(--font-sora);
   --font-khmer: var(--font-kantumruy-pro);
@@ -271,6 +287,31 @@
   }
   
   .animate-pulse-fast {
-    animation: pulse-fast 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
+  animation: pulse-fast 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Data Controls hover colors */
+[data-hover-color="blue"] {
+  background-color: rgb(219 234 254) !important;
+}
+
+.dark [data-hover-color="blue"] {
+  background-color: rgb(30 64 175 / 0.3) !important;
+}
+
+[data-hover-color="green"] {
+  background-color: rgb(220 252 231) !important;
+}
+
+.dark [data-hover-color="green"] {
+  background-color: rgb(20 83 45 / 0.3) !important;
+}
+
+[data-hover-color="red"] {
+  background-color: rgb(254 226 226) !important;
+}
+
+.dark [data-hover-color="red"] {
+  background-color: rgb(185 28 28 / 0.35) !important;
+}
 }
