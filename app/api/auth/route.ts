@@ -68,13 +68,16 @@ export async function POST(request: NextRequest) {
       user: data.user || data.data?.user || { email, name: email.split('@')[0] },
     });
 
-    // Set token in cookie for middleware access (session cookie - expires when browser closes)
+    // Set token in cookie for middleware access
+    // Use session cookie - expires when browser/tab closes (no maxAge)
+    // This ensures users must login again after closing the browser
     response.cookies.set('token', token, {
-      httpOnly: false, // Allow client-side access
+      httpOnly: false, // Allow client-side access (for consistency with sessionStorage)
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      // No maxAge means it's a session cookie that expires when browser closes
       path: '/',
+      // No maxAge = session cookie that expires when browser closes
+      // This ensures no persistent login - users must login again after closing browser
     });
 
     return response;

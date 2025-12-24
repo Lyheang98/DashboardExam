@@ -17,6 +17,8 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
+    // Check for token - if not found, redirect to login
+    // This is a client-side check in addition to middleware
     const token = getToken();
     if (!token) {
       router.push("/login");

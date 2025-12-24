@@ -83,6 +83,53 @@ function isVolunteerSchool(school: any): boolean {
   return typeH.includes('សាលាស្ម័គ្រចិត្ត') || typeK.includes('សាលាស្ម័គ្រចិត្ត');
 }
 
+// Helper function to check if a school is a GEIP school
+// GEIP school = has geip_school_ID
+function isGEIPSchool(school: any): boolean {
+  return !!school.geip_school_ID;
+}
+
+// Helper function to check if a school is a GEIP AF school
+// GEIP AF = has geip_school_ID and contains "GEIP-AF" or "GEIP AF" in school_type or related fields
+function isGEIPAFSchool(school: any): boolean {
+  if (!school.geip_school_ID) return false;
+  
+  const typeH = (school.school_type_h || '').toString().toUpperCase();
+  const typeK = (school.school_type_k || '').toString().toUpperCase();
+  const schoolType = (school.school_type || '').toString().toUpperCase();
+  const geipType = (school.geip_type || school.GEIP_type || '').toString().toUpperCase();
+  
+  // Check for "GEIP-AF" or "GEIP AF" patterns
+  return typeH.includes('GEIP-AF') || typeK.includes('GEIP-AF') ||
+         typeH.includes('GEIP AF') || typeK.includes('GEIP AF') ||
+         schoolType.includes('GEIP-AF') || schoolType.includes('GEIP AF') ||
+         geipType.includes('GEIP-AF') || geipType.includes('GEIP AF') ||
+         school.GEIP_AF === true || school.geip_af === true ||
+         school.geip_type === 'GEIP-AF' || school.GEIP_type === 'GEIP-AF';
+}
+
+// Helper function to check if a school is a GEIP school (but NOT GEIP-AF)
+// GEIP = school_type_h is exactly "GEIP" (not "GEIP-AF")
+// This matches the filter logic exactly
+function isGEIPSchoolOnly(school: any): boolean {
+  const typeH = (school.school_type_h || '').toString();
+  const typeK = (school.school_type_k || '').toString();
+  
+  // Check for exact match with "GEIP" (case-insensitive)
+  const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
+  
+  if (exactGEIP) {
+    // Make sure it's not GEIP-AF
+    const isAF = typeH.toLowerCase().includes('geip-af') || 
+                typeK.toLowerCase().includes('geip-af') ||
+                typeH.toLowerCase().includes('geip af') || 
+                typeK.toLowerCase().includes('geip af');
+    return !isAF; // Return true only if it's NOT GEIP-AF
+  }
+  
+  return false;
+}
+
 export const schoolsService = {
   async getAll(token: string, params?: SchoolSearchParams) {
     try {
@@ -157,33 +204,18 @@ export const schoolsService = {
       let hasMore = true;
       let totalCount = 0;
 
-      // First, get the total count from the first page (limit 100 to get actual schools)
-      const firstPageResult = await this.getAll(token, { limit: 100, offset: 0 });
-      if (firstPageResult.success) {
-        totalCount = firstPageResult.count || 0;
-        const firstBatch = firstPageResult.data || [];
-        allSchools.push(...firstBatch);
-        logger.info(`First page result: count=${totalCount}, schools=${firstBatch.length}`, 'SCHOOLS');
-        offset = 100; // Start from offset 100 since we already got the first 100
-      } else {
-        logger.error('Failed to get first page for total count', 'SCHOOLS', firstPageResult.error);
-        // If first page fails, start from offset 0
-        offset = 0;
-      }
-
       // Fetch all schools page by page
-      let batchCount = 0;
-      while (hasMore && batchCount < 100) { // Safety limit of 100 batches
-        batchCount++;
+      while (hasMore) {
         const batchResult = await this.getAll(token, { limit, offset });
         
         if (!batchResult.success) {
           logger.error(`Failed to fetch schools batch at offset ${offset}`, 'SCHOOLS', batchResult.error);
-          // If we have some data, continue with what we have
-          if (allSchools.length > 0) {
-            logger.warn(`Stopping pagination after ${batchCount} batches, have ${allSchools.length} schools`, 'SCHOOLS');
-          }
           break;
+        }
+
+        // Get total count from first batch
+        if (totalCount === 0) {
+          totalCount = batchResult.count || 0;
         }
 
         const batch = batchResult.data || [];
@@ -193,7 +225,6 @@ export const schoolsService = {
         }
         
         allSchools.push(...batch);
-        logger.info(`Batch ${batchCount}: fetched ${batch.length} schools (total so far: ${allSchools.length})`, 'SCHOOLS');
 
         // Check if there are more pages
         hasMore = batchResult.next !== null && batch.length === limit;
@@ -203,17 +234,14 @@ export const schoolsService = {
         if (totalCount > 0 && allSchools.length >= totalCount) {
           hasMore = false;
         }
+
+        // Safety limit
+        if (allSchools.length > 10000) {
+          hasMore = false;
+        }
       }
 
       logger.info(`Fetched ${allSchools.length} schools total (API reported: ${totalCount})`, 'SCHOOLS');
-      
-      if (allSchools.length === 0) {
-        logger.warn('No schools fetched from API - this might indicate an authentication or API issue', 'SCHOOLS', { 
-          totalCount, 
-          firstPageSuccess: firstPageResult.success,
-          firstPageError: firstPageResult.error 
-        });
-      }
 
       // Use totalCount from API as the base count (should be 1825)
       const baseTotalCount = totalCount > 0 ? totalCount : allSchools.length;
@@ -248,9 +276,38 @@ export const schoolsService = {
 
       // Filter by school type
       if (params.school_type) {
+        const filterType = params.school_type.trim();
         filteredSchools = filteredSchools.filter((school) => {
-          const type = (school.school_type_h || '').toLowerCase();
-          return type.includes(params.school_type!.toLowerCase());
+          const typeH = (school.school_type_h || '').toString();
+          const typeK = (school.school_type_k || '').toString();
+          
+          // For "GEIP" filter, show only schools where school_type_h is exactly "GEIP" (not "GEIP-AF")
+          if (filterType.toLowerCase() === 'geip') {
+            // Check for exact match with "GEIP" but exclude "GEIP-AF" or "GEIP AF"
+            const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
+            if (exactGEIP) {
+              // Make sure it's not GEIP-AF
+              const isAF = typeH.toLowerCase().includes('geip-af') || 
+                          typeK.toLowerCase().includes('geip-af') ||
+                          typeH.toLowerCase().includes('geip af') || 
+                          typeK.toLowerCase().includes('geip af');
+              return !isAF; // Return true only if it's NOT GEIP-AF
+            }
+            return false;
+          }
+          
+          // For "GEIP-AF" or "GEIP AF" filter, use the helper function
+          if (filterType.toLowerCase() === 'geip-af' || filterType.toLowerCase() === 'geip af') {
+            return isGEIPAFSchool(school);
+          }
+          
+          // For other filters, use exact match first, then fall back to includes
+          const exactMatch = typeH.toLowerCase() === filterType.toLowerCase() || 
+                           typeK.toLowerCase() === filterType.toLowerCase();
+          if (exactMatch) return true;
+          
+          return typeH.toLowerCase().includes(filterType.toLowerCase()) || 
+                 typeK.toLowerCase().includes(filterType.toLowerCase());
         });
       }
 
@@ -280,25 +337,85 @@ export const schoolsService = {
     }
   },
 
-  async getTotalCount(token: string): Promise<{ success: boolean; total: number; target: number; notTarget: number; error?: string }> {
+  async getTotalCount(token: string): Promise<{ success: boolean; total: number; target: number; notTarget: number; geipSchool: number; geipAF: number; error?: string }> {
     try {
-      // Fetch first page to get total count from API
-      const result = await this.getAll(token, { limit: 1, offset: 0 });
+      // Optimized fetching: count as we fetch (streaming approach) for better performance
+      const limit = 1000; // Large batch size to minimize API calls
+      let offset = 0;
+      let total = 0;
+      let hasMore = true;
       
-      if (!result.success) {
-        return { success: false, total: 0, target: 0, notTarget: 0, error: result.error };
+      // Counters - count schools as we fetch them instead of storing all in memory
+      let targetCount = 0;
+      let notTargetCount = 0;
+      let geipAFCount = 0;
+      let geipSchoolCount = 0;
+      let processedCount = 0;
+
+      // Fetch first batch to get total count
+      const firstBatchResult = await this.getAll(token, { limit, offset });
+      
+      if (!firstBatchResult.success) {
+        return { success: false, total: 0, target: 0, notTarget: 0, geipSchool: 0, geipAF: 0, error: firstBatchResult.error };
       }
 
-      // Use the count from API response (this is the accurate total)
-      const total = result.count || 0;
+      total = firstBatchResult.count || 0;
+      const firstBatch = firstBatchResult.data || [];
+      
+      // Process first batch immediately
+      for (const school of firstBatch) {
+        if (isTargetSchool(school)) targetCount++;
+        if (isVolunteerSchool(school)) notTargetCount++;
+        if (isGEIPAFSchool(school)) geipAFCount++;
+        if (isGEIPSchoolOnly(school)) geipSchoolCount++;
+        processedCount++;
+      }
 
-      // Fetch all schools using pagination to count target/not target
-      const allSchools: School[] = [];
-      let offset = 0;
-      const limit = 100; // Fetch in batches
-      let hasMore = true;
+      offset += limit;
+      hasMore = firstBatchResult.next !== null && firstBatch.length === limit;
 
-      while (hasMore) {
+      // Fetch remaining batches in parallel (if multiple batches needed)
+      // This significantly speeds up fetching by making concurrent requests
+      if (hasMore && total > processedCount) {
+        const remainingCount = total - processedCount;
+        const batchesNeeded = Math.ceil(remainingCount / limit);
+        
+        // Fetch up to 3 batches in parallel for optimal speed
+        const maxParallelBatches = Math.min(3, batchesNeeded);
+        const parallelPromises: Promise<any>[] = [];
+        
+        for (let i = 0; i < maxParallelBatches; i++) {
+          const currentOffset = offset + (i * limit);
+          if (currentOffset < total) {
+            parallelPromises.push(this.getAll(token, { limit, offset: currentOffset }));
+          }
+        }
+
+        // Process parallel batches as they complete
+        if (parallelPromises.length > 0) {
+          const batchResults = await Promise.all(parallelPromises);
+          
+          for (let i = 0; i < batchResults.length; i++) {
+            const batchResult = batchResults[i];
+            if (!batchResult.success) continue;
+            
+            const batch = batchResult.data || [];
+            for (const school of batch) {
+              if (isTargetSchool(school)) targetCount++;
+              if (isVolunteerSchool(school)) notTargetCount++;
+              if (isGEIPAFSchool(school)) geipAFCount++;
+              if (isGEIPSchoolOnly(school)) geipSchoolCount++;
+              processedCount++;
+            }
+          }
+          
+          // Update offset for sequential fetching
+          offset += (parallelPromises.length * limit);
+        }
+      }
+
+      // Fetch any remaining batches sequentially (if more than parallel limit)
+      while (hasMore && processedCount < total) {
         const batchResult = await this.getAll(token, { limit, offset });
         
         if (!batchResult.success) {
@@ -306,23 +423,41 @@ export const schoolsService = {
         }
 
         const batch = batchResult.data || [];
-        allSchools.push(...batch);
+        if (batch.length === 0) {
+          break;
+        }
+        
+        // Process batch immediately
+        for (const school of batch) {
+          if (isTargetSchool(school)) targetCount++;
+          if (isVolunteerSchool(school)) notTargetCount++;
+          if (isGEIPAFSchool(school)) geipAFCount++;
+          if (isGEIPSchoolOnly(school)) geipSchoolCount++;
+          processedCount++;
+        }
 
-        // Check if there are more pages
         hasMore = batchResult.next !== null && batch.length === limit;
         offset += limit;
+        
+        // Early exit if we've processed all schools
+        if (total > 0 && processedCount >= total) {
+          hasMore = false;
+        }
       }
 
-      // Count target schools - schools with "សាលាគោលដៅ" (target school) in school_type
-      const target = allSchools.filter((school) => isTargetSchool(school)).length;
-      
-      // Count not target schools - ONLY volunteer schools (សាលាស្ម័គ្រចិត្ត)
-      const notTarget = allSchools.filter((school) => isVolunteerSchool(school)).length;
+      logger.info(`Processed ${processedCount} schools for counts`, 'SCHOOLS');
 
-      return { success: true, total, target, notTarget };
+      return { 
+        success: true, 
+        total, 
+        target: targetCount, 
+        notTarget: notTargetCount, 
+        geipSchool: geipSchoolCount, 
+        geipAF: geipAFCount 
+      };
     } catch (error: any) {
       logger.error('Get schools total count error', 'SCHOOLS', error);
-      return { success: false, total: 0, target: 0, notTarget: 0, error: error.message || 'Failed to fetch schools count' };
+      return { success: false, total: 0, target: 0, notTarget: 0, geipSchool: 0, geipAF: 0, error: error.message || 'Failed to fetch schools count' };
     }
   },
 

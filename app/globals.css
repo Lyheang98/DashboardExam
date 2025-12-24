@@ -259,4 +259,18 @@
       linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   }
+
+  /* Faster pulse animation for loading logos */
+  @keyframes pulse-fast {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  
+  .animate-pulse-fast {
+    animation: pulse-fast 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
 }

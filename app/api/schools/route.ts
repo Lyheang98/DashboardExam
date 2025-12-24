@@ -30,6 +30,8 @@ export async function GET(request: NextRequest) {
       total: result.total,
       target: result.target,
       notTarget: result.notTarget,
+      geipSchool: result.geipSchool,
+      geipAF: result.geipAF,
     });
   } catch (error: any) {
     return NextResponse.json(

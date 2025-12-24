@@ -40,6 +40,8 @@ export default function DashboardPage() {
   const [totalSchools, setTotalSchools] = useState<number>(0);
   const [targetSchools, setTargetSchools] = useState<number>(0);
   const [notTargetSchools, setNotTargetSchools] = useState<number>(0);
+  const [geipSchools, setGeipSchools] = useState<number>(0);
+  const [geipAFSchools, setGeipAFSchools] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [usersGran, setUsersGran] = useState<Granularity>(DEFAULT_GRANULARITY);
   const [productsGran, setProductsGran] = useState<Granularity>(DEFAULT_GRANULARITY);
@@ -125,12 +127,16 @@ export default function DashboardPage() {
             setTotalSchools(data.total || 0);
             setTargetSchools(data.target || 0);
             setNotTargetSchools(data.notTarget || 0);
-            logger.info(`Schools count fetched: Total=${data.total}, Target=${data.target}, NotTarget=${data.notTarget}`, 'DASHBOARD');
+            setGeipSchools(data.geipSchool || 0);
+            setGeipAFSchools(data.geipAF || 0);
+            logger.info(`Schools count fetched: Total=${data.total}, Target=${data.target}, NotTarget=${data.notTarget}, GEIP=${data.geipSchool}, GEIP AF=${data.geipAF}`, 'DASHBOARD');
           } else {
             logger.error('Schools API returned error', 'DASHBOARD', new Error(data.error || 'Unknown error'));
             setTotalSchools(0);
             setTargetSchools(0);
             setNotTargetSchools(0);
+            setGeipSchools(0);
+            setGeipAFSchools(0);
           }
         }
       } catch (error: any) {
@@ -139,6 +145,8 @@ export default function DashboardPage() {
           setTotalSchools(0);
           setTargetSchools(0);
           setNotTargetSchools(0);
+          setGeipSchools(0);
+          setGeipAFSchools(0);
         }
       }
     };
@@ -190,8 +198,43 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
-      {/* Stats Cards - First Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-3 mb-4 sm:mb-5">
+      {/* Stats Cards - Continuous Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-3 mb-4 sm:mb-6">
+        <StatCard
+          title={t.dashboard.schools}
+          value={totalSchools}
+          description="Total schools"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="Target Schools"
+          value={targetSchools}
+          description="Target schools count"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="Non-Target Schools"
+          value={notTargetSchools}
+          description="Non-target schools count"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="GEIP Schools"
+          value={geipSchools}
+          description="GEIP schools count"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="GEIP AF Schools"
+          value={geipAFSchools}
+          description="GEIP AF schools count"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
         <StatCard
           title={t.dashboard.totalUsers}
           value={users.length}
@@ -215,38 +258,6 @@ export default function DashboardPage() {
         />
         <StatCard
           title={t.dashboard.inStock}
-          value={inStockCount}
-          description={t.dashboard.availableProducts}
-          icon={TrendingUp}
-          trend={{ value: 4, isPositive: true }}
-        />
-      </div>
-
-      {/* Stats Cards - Second Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4 sm:mb-6">
-        <StatCard
-          title={t.dashboard.schools}
-          value={totalSchools}
-          description="Total schools"
-          icon={School}
-          trend={{ value: 4, isPositive: true }}
-        />
-        <StatCard
-          title="Target Schools"
-          value={targetSchools}
-          description="Target schools count"
-          icon={School}
-          trend={{ value: 4, isPositive: true }}
-        />
-        <StatCard
-          title="Not Target Schools"
-          value={notTargetSchools}
-          description="Not target schools count"
-          icon={School}
-          trend={{ value: 4, isPositive: true }}
-        />
-        <StatCard
-          title={t.dashboard.student}
           value={inStockCount}
           description={t.dashboard.availableProducts}
           icon={TrendingUp}

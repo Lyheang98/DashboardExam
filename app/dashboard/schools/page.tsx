@@ -24,6 +24,7 @@ import { DataTable, DataTableColumn } from "@/components/dashboard/DataTable";
 import { logger } from "@/lib/logger";
 import { useLanguage } from "@/lib/i18n/context";
 import { getToken } from "@/lib/auth";
+import { Loading } from "@/components/ui/Loading";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -187,13 +188,18 @@ export default function SchoolsPage() {
     [page, perPage, total]
   );
 
-  // Get unique provinces and districts for filters
-  const uniqueProvinces = useMemo(() => {
-    const provinces = new Set<string>();
+  // Get unique provinces with counts for filters
+  const provinceList = useMemo(() => {
+    const provinceCounts = new Map<string, number>();
     schools.forEach(school => {
-      if (school.province_name) provinces.add(school.province_name);
+      if (school.province_name) {
+        const count = provinceCounts.get(school.province_name) || 0;
+        provinceCounts.set(school.province_name, count + 1);
+      }
     });
-    return Array.from(provinces).sort();
+    return Array.from(provinceCounts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [schools]);
 
   const uniqueSchoolTypes = useMemo(() => {
@@ -243,7 +249,7 @@ export default function SchoolsPage() {
                 : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
             }`}
           >
-            {isTarget ? "Target" : "Not Target"}
+            {isTarget ? "Target" : "Non-Target"}
           </span>
         );
       },
@@ -302,9 +308,9 @@ export default function SchoolsPage() {
               className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
             >
               <option value="" className="font-khmer">All Provinces</option>
-              {uniqueProvinces.map((province) => (
-                <option key={province} value={province} className="font-khmer">
-                  {province}
+              {provinceList.map((province) => (
+                <option key={province.name} value={province.name} className="font-khmer">
+                  {province.name} ({province.count})
                 </option>
               ))}
             </select>
@@ -366,7 +372,7 @@ export default function SchoolsPage() {
             >
               <option value="">All Schools</option>
               <option value="true">Target Schools</option>
-              <option value="false">Not Target Schools</option>
+              <option value="false">Non-Target Schools</option>
             </select>
           </div>
         </div>
@@ -390,28 +396,11 @@ export default function SchoolsPage() {
       {/* LOADING STATE OR DATA TABLE */}
       {/* ============================================ */}
       {loading ? (
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-8 shadow-sm">
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="mb-6">
-              <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
-            </div>
-            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Loading schools...
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Please wait while we fetch the data
-            </p>
-          </div>
-
-          <div className="space-y-3 mt-8">
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-12 bg-gray-100 dark:bg-slate-800 rounded animate-pulse"
-              ></div>
-            ))}
-          </div>
-        </div>
+        <Loading
+          title="Loading schools..."
+          description="Please wait while we fetch the data"
+          showSkeleton={true}
+        />
       ) : (
         <>
           {/* Data Table */}

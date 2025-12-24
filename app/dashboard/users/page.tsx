@@ -42,6 +42,7 @@ import { DataTable } from "@/components/dashboard/DataTable";
 import { logger } from "@/lib/logger";
 import { getToken } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n/context";
+import { Loading } from "@/components/ui/Loading";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -553,30 +554,11 @@ export default function UsersPage() {
       {/* LOADING STATE OR DATA TABLE */}
       {/* ============================================ */}
       {loading ? (
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-8 shadow-sm">
-          {/* Loading Spinner */}
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="mb-6">
-              <div className="w-12 h-12 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
-            </div>
-            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              {t.users.loadingUsers}
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t.users.pleaseWaitUsers}
-            </p>
-          </div>
-
-          {/* Skeleton Loaders - Simulate table rows while loading */}
-          <div className="space-y-3 mt-8">
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-12 bg-gray-100 dark:bg-slate-800 rounded animate-pulse"
-              ></div>
-            ))}
-          </div>
-        </div>
+        <Loading
+          title={t.users.loadingUsers || "Loading users..."}
+          description={t.users.pleaseWaitUsers}
+          showSkeleton={true}
+        />
       ) : (
         <>
           {/* Data Table - Displays paginated users */}

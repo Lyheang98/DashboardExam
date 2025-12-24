@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { setToken, setUser, getToken } from '@/lib/auth';
+import { setToken, setUser, getToken, clearToken } from '@/lib/auth';
 import { useToast } from '@/components/ui/toast';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { IMAGE_PATHS } from '@/lib/images';
@@ -32,13 +32,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Redirect if already logged in
+  // Don't auto-redirect on login page - let user login fresh
+  // Middleware will handle redirect if they have a valid token
   useEffect(() => {
+    // Clear any stale tokens to ensure fresh login
     const token = getToken();
     if (token) {
-      router.push(redirectTo);
+      // Clear token to force fresh login
+      clearToken();
+      if (typeof document !== 'undefined') {
+        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+      }
     }
-  }, [router, redirectTo]);
+  }, []);
 
   // Load saved credentials on mount
   useEffect(() => {
