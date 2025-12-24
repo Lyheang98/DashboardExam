@@ -51,7 +51,7 @@
    ================================ */
 .dark {
   /* Custom dashboard base */
-  --dashboard-dark: #151B29;
+  --dashboard-dark: #1E2535;
 
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

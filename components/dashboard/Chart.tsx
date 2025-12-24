@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTheme } from 'next-themes'
 
 type Point = { label: string; value: number }
 
@@ -33,11 +34,25 @@ export function BarChart({
   color?: string
   left?: number
 }) {
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+  const [textColor, setTextColor] = React.useState('#1e40af') // Default primary blue
   const max = Math.max(...data.map((d) => d.value), 1)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = React.useState(600)
   const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null)
   const [tooltipPos, setTooltipPos] = React.useState({ x: 0, y: 0 })
+  
+  React.useEffect(() => {
+    setMounted(true)
+    // Set text color based on theme: primary blue in light mode, white in dark mode
+    // Default to primary blue (light mode) if resolvedTheme is not explicitly 'dark'
+    if (resolvedTheme === 'dark') {
+      setTextColor('white')
+    } else {
+      setTextColor('#1e40af') // Primary dark blue matches the title color
+    }
+  }, [resolvedTheme])
 
   React.useEffect(() => {
     const updateWidth = () => {
@@ -93,7 +108,7 @@ export function BarChart({
             return (
               <g key={t}>
                 <line x1={responsiveLeft} x2={chartWidth - 24} y1={y} y2={y} stroke="#e5e7eb" strokeWidth={1} />
-                <text x={responsiveLeft - 8} y={y + 4} fontSize={containerWidth < 640 ? 10 : 12} textAnchor="end" fill="#6b7280">
+                <text x={responsiveLeft - 8} y={y + 4} fontSize={containerWidth < 640 ? 10 : 12} textAnchor="end" fill={textColor}>
                   {commas(t)}
                 </text>
               </g>
@@ -162,7 +177,7 @@ export function BarChart({
                   y={textY} 
                   fontSize={fontSize} 
                   textAnchor="middle" 
-                  fill="#374151"
+                  fill={textColor}
                   style={{ userSelect: 'none' }}
                 >
                   {getLabel(d.label)}
@@ -187,9 +202,18 @@ export function LineChart({
   color?: string
   left?: number
 }) {
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+  const [textColor, setTextColor] = React.useState('#1e40af')
   const max = Math.max(...data.map((d) => d.value), 1)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = React.useState(600)
+  
+  React.useEffect(() => {
+    setMounted(true)
+    const isDark = resolvedTheme === 'dark'
+    setTextColor(isDark ? 'white' : '#1e40af')
+  }, [resolvedTheme])
 
   React.useEffect(() => {
     const updateWidth = () => {
@@ -234,7 +258,7 @@ export function LineChart({
             return (
               <g key={t}>
                 <line x1={responsiveLeft} x2={chartWidth - 24} y1={y} y2={y} stroke="#e5e7eb" strokeWidth={1} />
-                <text x={responsiveLeft - 8} y={y + 4} fontSize={containerWidth < 640 ? 10 : 12} textAnchor="end" fill="#6b7280">
+                <text x={responsiveLeft - 8} y={y + 4} fontSize={containerWidth < 640 ? 10 : 12} textAnchor="end" fill={textColor}>
                   {commas(t)}
                 </text>
               </g>
@@ -278,7 +302,7 @@ export function LineChart({
                 y={height - 6} 
                 fontSize={fontSize} 
                 textAnchor="middle" 
-                fill="#374151"
+                fill={textColor}
                 style={{ userSelect: 'none' }}
               >
                 {getLabel(d.label)}
