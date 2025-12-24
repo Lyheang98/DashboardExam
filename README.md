@@ -157,9 +157,9 @@ Service filters for staff/admin only
 Response flows back through layers
     ↓
 Frontend displays users in table
-
----
-* Difference between the three buttons:*
+```
+### Difference between the three buttons:*
+```
 - Refresh Data (blue)
   Clears the schools cache specifically
   Immediately fetches fresh schools data
@@ -174,8 +174,7 @@ Frontend displays users in table
   Immediately fetches fresh data
   Updates the display with new data
   Useful when you want to reset everything and see the latest data
-  ---
-
+ ```
 ## Tech Stack
 
 - Next.js 14 (App Router)
