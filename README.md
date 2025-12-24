@@ -16,13 +16,6 @@ A Next.js dashboard application with authentication and user management.
 npm install
 ```
 
-2. Create `.env.local` file:
-```env
-EXTERNAL_API_BASE_URL=https://moeys-exam-qbfys.ondigitalocean.app
-EXTERNAL_API_AUTH_URL=https://moeys-exam-qbfys.ondigitalocean.app/api/token/
-EXTERNAL_API_USERS_URL=https://moeys-exam-qbfys.ondigitalocean.app/api/users/
-```
-
 3. Run development server:
 ```bash
 npm run dev
@@ -87,26 +80,6 @@ const response = await apiClient.get(endpoint, { token });
 - Handles network errors gracefully
 - Parses JSON/text responses automatically
 - Extracts error messages from different API formats
-
-### Configuration (`lib/api/config.ts`)
-
-All endpoints are centralized:
-
-```typescript
-export const EXTERNAL_ENDPOINTS = {
-  AUTH: {
-    TOKEN: 'https://moeys-exam-qbfys.ondigitalocean.app/api/token/',
-    REFRESH: '.../api/token/refresh/',
-    VERIFY: '.../api/token/verify/',
-  },
-  SCHOOL: {
-    BASE: 'https://moeys-exam-qbfys.ondigitalocean.app/api/schools/',
-    DETAIL: (id) => `.../api/schools/${id}/`,
-  },
-};
-```
-
----
 
 ## Complete Flow Examples
 
