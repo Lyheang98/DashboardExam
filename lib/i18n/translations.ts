@@ -19,6 +19,7 @@ export interface Translations {
     dashboard: string;
     users: string;
     products: string;
+    schools: string;
     settings: string;
   };
   // Dashboard Page
@@ -223,6 +224,7 @@ export const translations: Record<Language, Translations> = {
       dashboard: 'Dashboard',
       users: 'Users Account and Right',
       products: 'Products',
+      schools: 'Schools',
       settings: 'Settings',
     },
     dashboard: {
@@ -419,6 +421,7 @@ export const translations: Record<Language, Translations> = {
       dashboard: 'ផ្ទាំងគ្រប់គ្រង',
       users: 'គណនីអ្នកប្រើប្រាស់ និងសិទ្ធិ',
       products: 'ផលិតផល',
+      schools: 'សាលា',
       settings: 'ការកំណត់',
     },
     dashboard: {

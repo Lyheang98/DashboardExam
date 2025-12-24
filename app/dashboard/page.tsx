@@ -17,10 +17,11 @@
  */
 
 import { useEffect, useState, useMemo } from 'react';
-import { Users, Package, TrendingUp, DollarSign } from 'lucide-react';
+import { Users, Package, TrendingUp, DollarSign, School } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
 import { useLanguage } from '@/lib/i18n/context';
 import { logger } from '@/lib/logger';
+import { getToken } from '@/lib/auth';
 import { DashboardUser, DashboardProduct, Granularity } from './types';
 import { fetchDashboardData } from './utils';
 import { ChartSection } from './components/ChartSection';
@@ -36,6 +37,9 @@ export default function DashboardPage() {
   // State management
   const [users, setUsers] = useState<DashboardUser[]>([]);
   const [products, setProducts] = useState<DashboardProduct[]>([]);
+  const [totalSchools, setTotalSchools] = useState<number>(0);
+  const [targetSchools, setTargetSchools] = useState<number>(0);
+  const [notTargetSchools, setNotTargetSchools] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [usersGran, setUsersGran] = useState<Granularity>(DEFAULT_GRANULARITY);
   const [productsGran, setProductsGran] = useState<Granularity>(DEFAULT_GRANULARITY);
@@ -85,6 +89,67 @@ export default function DashboardPage() {
       controller.abort();
     };
   }, []);
+
+  // Fetch schools total count
+  useEffect(() => {
+    if (!mounted) return; // Wait for component to mount
+    
+    const controller = new AbortController();
+    let isMounted = true;
+
+    const fetchSchoolsCount = async () => {
+      try {
+        const token = getToken();
+        if (!token) {
+          logger.warn('No token available for schools fetch', 'DASHBOARD');
+          return;
+        }
+
+        const response = await fetch('/api/schools', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        if (isMounted && !controller.signal.aborted) {
+          if (data.success) {
+            setTotalSchools(data.total || 0);
+            setTargetSchools(data.target || 0);
+            setNotTargetSchools(data.notTarget || 0);
+            logger.info(`Schools count fetched: Total=${data.total}, Target=${data.target}, NotTarget=${data.notTarget}`, 'DASHBOARD');
+          } else {
+            logger.error('Schools API returned error', 'DASHBOARD', new Error(data.error || 'Unknown error'));
+            setTotalSchools(0);
+            setTargetSchools(0);
+            setNotTargetSchools(0);
+          }
+        }
+      } catch (error: any) {
+        if (isMounted && error?.name !== 'AbortError') {
+          logger.error('Failed to fetch schools count', 'DASHBOARD', error);
+          setTotalSchools(0);
+          setTargetSchools(0);
+          setNotTargetSchools(0);
+        }
+      }
+    };
+
+    fetchSchoolsCount();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [mounted]);
 
   // Get translated month names
   const monthNames = useMemo(
@@ -161,27 +226,27 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-4 sm:mb-6">
         <StatCard
           title={t.dashboard.schools}
-          value={inStockCount}
-          description={t.dashboard.availableProducts}
-          icon={TrendingUp}
+          value={totalSchools}
+          description="Total schools"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="Target Schools"
+          value={targetSchools}
+          description="Target schools count"
+          icon={School}
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatCard
+          title="Not Target Schools"
+          value={notTargetSchools}
+          description="Not target schools count"
+          icon={School}
           trend={{ value: 4, isPositive: true }}
         />
         <StatCard
           title={t.dashboard.student}
-          value={inStockCount}
-          description={t.dashboard.availableProducts}
-          icon={TrendingUp}
-          trend={{ value: 4, isPositive: true }}
-        />
-        <StatCard
-          title={t.dashboard.districts}
-          value={inStockCount}
-          description={t.dashboard.availableProducts}
-          icon={TrendingUp}
-          trend={{ value: 4, isPositive: true }}
-        />
-        <StatCard
-          title={t.dashboard.subjects}
           value={inStockCount}
           description={t.dashboard.availableProducts}
           icon={TrendingUp}

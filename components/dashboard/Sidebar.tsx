@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Package, Settings, ChevronDown } from "lucide-react";
+import { LayoutDashboard, Users, Settings, ChevronDown, School } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -40,7 +40,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const menuItems = [
     { icon: LayoutDashboard, label: t.sidebar.dashboard, href: "/dashboard" },
     { icon: Users, label: t.sidebar.users, href: "/dashboard/users" },
-    { icon: Package, label: t.sidebar.products, href: "/dashboard/products" },
+    { icon: School, label: t.sidebar.schools, href: "/dashboard/schools" },
   ];
 
   const settingsMenuItems = [

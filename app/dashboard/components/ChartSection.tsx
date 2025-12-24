@@ -75,7 +75,13 @@ export function ChartSection({
           />
         </div>
       </div>
-      <BarChart data={chartData} color={color} />
+      {mounted ? (
+        <BarChart data={chartData} color={color} />
+      ) : (
+        <div className="w-full h-[240px] bg-card rounded-lg border flex items-center justify-center">
+          <div className="text-sm text-muted-foreground">Loading chart...</div>
+        </div>
+      )}
     </div>
   );
 }

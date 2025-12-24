@@ -58,7 +58,7 @@ function DataTableComponent<T extends { id: string | number }>({
   // Memoize columns to prevent re-renders
   const tableHeaders = useMemo(() => {
     return columns.map((column) => (
-      <TableHead key={String(column.key)} className="font-semibold">
+      <TableHead key={String(column.key)} className="font-semibold px-6 py-4">
         {column.label}
       </TableHead>
     ));
@@ -69,14 +69,14 @@ function DataTableComponent<T extends { id: string | number }>({
     return data.map((row) => (
       <TableRow key={row.id}>
         {columns.map((column) => (
-          <TableCell key={String(column.key)}>
+          <TableCell key={String(column.key)} className="px-6 py-4">
             {column.render
               ? column.render(row[column.key], row)
               : String(row[column.key])}
           </TableCell>
         ))}
         {(onEdit || onDelete) && (
-          <TableCell>
+          <TableCell className="px-6 py-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -126,7 +126,7 @@ function DataTableComponent<T extends { id: string | number }>({
         <TableHeader>
           <TableRow className="bg-muted/50">
             {tableHeaders}
-            {(onEdit || onDelete) && <TableHead>{t.table.actions}</TableHead>}
+            {(onEdit || onDelete) && <TableHead className="px-6 py-4">{t.table.actions}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>

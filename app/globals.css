@@ -210,6 +210,11 @@
     font-family: var(--font-kantumruy-pro) !important;
   }
 
+  /* Standalone font-khmer utility class */
+  .font-khmer {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
   /* Universal catch-all for Khmer language - ensures ALL elements get the font */
   html.lang-khmer *:not(script):not(style):not([class*="font-mono"]) {
     font-family: var(--font-kantumruy-pro) !important;

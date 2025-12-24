@@ -45,6 +45,11 @@ export const EXTERNAL_ENDPOINTS = {
     UPDATE: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
     DELETE: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
   },
+  SCHOOLS: {
+    BASE: getEnv('EXTERNAL_API_SCHOOLS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/`),
+    LIST: getEnv('EXTERNAL_API_SCHOOLS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/`),
+    DETAIL: (id: string | number) => `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/${id}/`,
+  },
 } as const;
 
 export const INTERNAL_ENDPOINTS = {
@@ -68,6 +73,11 @@ export const INTERNAL_ENDPOINTS = {
     CREATE: `${INTERNAL_API_BASE}/products`,
     UPDATE: (id: string | number) => `${INTERNAL_API_BASE}/products/${id}`,
     DELETE: (id: string | number) => `${INTERNAL_API_BASE}/products/${id}`,
+  },
+  SCHOOLS: {
+    BASE: `${INTERNAL_API_BASE}/schools`,
+    LIST: `${INTERNAL_API_BASE}/schools`,
+    DETAIL: (id: string | number) => `${INTERNAL_API_BASE}/schools/${id}`,
   },
 } as const;
 
