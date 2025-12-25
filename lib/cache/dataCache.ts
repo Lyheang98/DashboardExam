@@ -11,7 +11,7 @@ interface CacheEntry<T> {
 
 class DataCache {
   private cache: Map<string, CacheEntry<any>> = new Map();
-  private defaultTTL = 5 * 60 * 1000; // 5 minutes default TTL
+  private defaultTTL = 10 * 60 * 1000; // 10 minutes default TTL (increased for better caching)
 
   /**
    * Get cached data if it exists and hasn't expired
@@ -94,5 +94,6 @@ export const CACHE_KEYS = {
   PRODUCTS_LIST: 'products:list',
   SCHOOLS_LIST: (params?: string) => `schools:list:${params || 'default'}`,
   USERS_SEARCH: (params?: string) => `users:search:${params || 'default'}`,
+  PROVINCE_SUMMARY: (params?: string) => `province_summary:${params || 'all'}`,
 } as const;
 

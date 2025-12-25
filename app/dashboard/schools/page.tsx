@@ -54,7 +54,7 @@ export default function SchoolsPage() {
 
   // Data state
   const [schools, setSchools] = useState<School[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Show loading initially
   const [mounted, setMounted] = useState(false);
 
   // Pagination state
@@ -262,6 +262,26 @@ export default function SchoolsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className={`text-3xl font-bold tracking-tight ${language === 'km' ? 'font-khmer' : ''}`}>
+            {t.schools.title}
+          </h1>
+          <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
+            {t.schools.subtitle}
+          </p>
+        </div>
+        <div className="text-right">
+          <div className={`text-2xl font-bold text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {loading ? '...' : total.toLocaleString()}
+          </div>
+          <p className={`text-sm text-muted-foreground mt-1 ${language === 'km' ? 'font-khmer' : ''}`}>
+            Total Schools
+          </p>
+        </div>
+      </div>
+
       {/* ============================================ */}
       {/* SEARCH AND FILTERS SECTION */}
       {/* ============================================ */}
@@ -293,7 +313,7 @@ export default function SchoolsPage() {
               placeholder={t.schools.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
+              className="w-full font-khmer"
             />
           </div>
 
@@ -333,7 +353,7 @@ export default function SchoolsPage() {
               placeholder={`${t.common.filter} ${t.schools.district.toLowerCase()}...`}
               value={districtFilter}
               onChange={(e) => setDistrictFilter(e.target.value)}
-              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
+              className="w-full font-khmer"
             />
           </div>
 

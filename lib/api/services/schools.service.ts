@@ -4,6 +4,7 @@
 
 import { apiClient, EXTERNAL_ENDPOINTS } from '../client';
 import { logger } from '../../logger';
+import { dataCache, CACHE_KEYS } from '@/lib/cache/dataCache';
 
 export interface School {
   id: string | number;
@@ -197,46 +198,102 @@ export const schoolsService = {
 
   async search(token: string, params: SchoolSearchParams) {
     try {
-      // Fetch ALL schools using pagination to ensure we get all schools from all provinces
+      // Create cache key based on params (exclude pagination for base cache)
+      const cacheKey = CACHE_KEYS.SCHOOLS_LIST(
+        JSON.stringify({ q: params.q, province: params.province, district: params.district, school_type: params.school_type, is_target: params.is_target })
+      );
+      const cacheTTL = 30 * 60 * 1000; // 30 minutes TTL
+
+      // Check cache first (only for base data without filters or with same filters)
+      const cached = dataCache.get<School[]>(cacheKey);
+      if (cached) {
+        logger.info(`Using cached schools data: ${cached.length} schools`, 'SCHOOLS');
+        return {
+          success: true,
+          data: cached,
+          count: cached.length,
+          next: null,
+          previous: null,
+        };
+      }
+
+      // Fetch ALL schools using optimized parallel pagination
       const allSchools: School[] = [];
       let offset = 0;
-      const limit = 100; // Fetch in batches of 100
+      const limit = 2000; // Increased batch size for faster fetching
+      const maxConcurrentBatches = 5; // Fetch 5 batches in parallel
       let hasMore = true;
       let totalCount = 0;
 
-      // Fetch all schools page by page
-      while (hasMore) {
-        const batchResult = await this.getAll(token, { limit, offset });
+      // Fetch first batch to get total count
+      const firstBatchResult = await this.getAll(token, { limit, offset });
+      
+      if (!firstBatchResult.success) {
+        logger.error(`Failed to fetch first schools batch`, 'SCHOOLS', firstBatchResult.error);
+        return { success: false, error: firstBatchResult.error || 'Failed to fetch schools', data: [], count: 0 };
+      }
+
+      totalCount = firstBatchResult.count || 0;
+      const firstBatch = firstBatchResult.data || [];
+      if (firstBatch.length > 0) {
+        allSchools.push(...firstBatch);
+        offset += limit;
+        hasMore = firstBatchResult.next !== null && firstBatch.length === limit;
+      }
+
+      // Fetch remaining batches in parallel for maximum speed
+      while (hasMore && allSchools.length < totalCount) {
+        const batchPromises: Promise<any>[] = [];
+        const batchOffsets: number[] = [];
         
-        if (!batchResult.success) {
-          logger.error(`Failed to fetch schools batch at offset ${offset}`, 'SCHOOLS', batchResult.error);
-          break;
+        // Prepare parallel batch requests
+        for (let i = 0; i < maxConcurrentBatches && offset < totalCount; i++) {
+          const currentOffset = offset + (i * limit);
+          if (currentOffset < totalCount) {
+            batchOffsets.push(currentOffset);
+            batchPromises.push(this.getAll(token, { limit, offset: currentOffset }));
+          }
         }
-
-        // Get total count from first batch
-        if (totalCount === 0) {
-          totalCount = batchResult.count || 0;
-        }
-
-        const batch = batchResult.data || [];
-        if (batch.length === 0) {
+        
+        if (batchPromises.length === 0) {
           hasMore = false;
           break;
         }
-        
-        allSchools.push(...batch);
 
+        // Execute parallel batches
+        const batchResults = await Promise.all(batchPromises);
+        
+        let foundData = false;
+        for (let i = 0; i < batchResults.length; i++) {
+          const batchResult = batchResults[i];
+          const batchOffset = batchOffsets[i];
+          
+          if (!batchResult.success) {
+            logger.warn(`Failed to fetch schools batch at offset ${batchOffset}`, 'SCHOOLS', batchResult.error);
+            continue;
+          }
+
+          const batch = batchResult.data || [];
+          if (batch.length === 0) {
+            hasMore = false;
+            break;
+          }
+          
+          allSchools.push(...batch);
+          foundData = true;
+        }
+
+        offset += limit * maxConcurrentBatches;
+        
         // Check if there are more pages
-        hasMore = batchResult.next !== null && batch.length === limit;
-        offset += limit;
+        const lastBatchData = batchResults[batchResults.length - 1]?.data || [];
+        hasMore = foundData && 
+                  lastBatchData.length === limit && 
+                  allSchools.length < totalCount &&
+                  offset < totalCount;
 
         // Safety check to prevent infinite loops
         if (totalCount > 0 && allSchools.length >= totalCount) {
-          hasMore = false;
-        }
-
-        // Safety limit
-        if (allSchools.length > 10000) {
           hasMore = false;
         }
       }
@@ -324,6 +381,16 @@ export const schoolsService = {
       const hasFilters = !!(params.q || params.province || params.district || params.school_type || params.is_target);
       const finalCount = hasFilters ? filteredSchools.length : baseTotalCount;
 
+      // Cache the unfiltered or filtered results (depending on whether filters were applied)
+      // Cache base data (no filters) for reuse
+      if (!hasFilters) {
+        dataCache.set(cacheKey, filteredSchools, cacheTTL);
+        logger.info(`Cached ${filteredSchools.length} schools for future requests`, 'SCHOOLS');
+      } else {
+        // Also cache filtered results for faster subsequent requests with same filters
+        dataCache.set(cacheKey, filteredSchools, cacheTTL);
+      }
+
       return { 
         success: true, 
         data: filteredSchools, 
@@ -339,8 +406,20 @@ export const schoolsService = {
 
   async getTotalCount(token: string): Promise<{ success: boolean; total: number; target: number; notTarget: number; geipSchool: number; geipAF: number; error?: string }> {
     try {
+      // Check cache first
+      const cacheKey = CACHE_KEYS.SCHOOLS_COUNT;
+      const cached = dataCache.get<{ total: number; target: number; notTarget: number; geipSchool: number; geipAF: number }>(cacheKey);
+      if (cached) {
+        logger.info('Using cached schools count', 'SCHOOLS');
+        return { 
+          success: true, 
+          ...cached 
+        };
+      }
+
       // Optimized fetching: count as we fetch (streaming approach) for better performance
-      const limit = 1000; // Large batch size to minimize API calls
+      const limit = 2000; // Increased batch size for faster fetching
+      const maxConcurrentBatches = 5; // Fetch 5 batches in parallel
       let offset = 0;
       let total = 0;
       let hasMore = true;
@@ -374,70 +453,60 @@ export const schoolsService = {
       offset += limit;
       hasMore = firstBatchResult.next !== null && firstBatch.length === limit;
 
-      // Fetch remaining batches in parallel (if multiple batches needed)
-      // This significantly speeds up fetching by making concurrent requests
-      if (hasMore && total > processedCount) {
-        const remainingCount = total - processedCount;
-        const batchesNeeded = Math.ceil(remainingCount / limit);
+      // Fetch remaining batches in parallel for maximum speed
+      while (hasMore && processedCount < total) {
+        const batchPromises: Promise<any>[] = [];
+        const batchOffsets: number[] = [];
         
-        // Fetch up to 3 batches in parallel for optimal speed
-        const maxParallelBatches = Math.min(3, batchesNeeded);
-        const parallelPromises: Promise<any>[] = [];
-        
-        for (let i = 0; i < maxParallelBatches; i++) {
+        // Prepare parallel batch requests
+        for (let i = 0; i < maxConcurrentBatches && offset < total; i++) {
           const currentOffset = offset + (i * limit);
           if (currentOffset < total) {
-            parallelPromises.push(this.getAll(token, { limit, offset: currentOffset }));
+            batchOffsets.push(currentOffset);
+            batchPromises.push(this.getAll(token, { limit, offset: currentOffset }));
           }
         }
-
-        // Process parallel batches as they complete
-        if (parallelPromises.length > 0) {
-          const batchResults = await Promise.all(parallelPromises);
-          
-          for (let i = 0; i < batchResults.length; i++) {
-            const batchResult = batchResults[i];
-            if (!batchResult.success) continue;
-            
-            const batch = batchResult.data || [];
-            for (const school of batch) {
-              if (isTargetSchool(school)) targetCount++;
-              if (isVolunteerSchool(school)) notTargetCount++;
-              if (isGEIPAFSchool(school)) geipAFCount++;
-              if (isGEIPSchoolOnly(school)) geipSchoolCount++;
-              processedCount++;
-            }
-          }
-          
-          // Update offset for sequential fetching
-          offset += (parallelPromises.length * limit);
-        }
-      }
-
-      // Fetch any remaining batches sequentially (if more than parallel limit)
-      while (hasMore && processedCount < total) {
-        const batchResult = await this.getAll(token, { limit, offset });
         
-        if (!batchResult.success) {
+        if (batchPromises.length === 0) {
+          hasMore = false;
           break;
         }
 
-        const batch = batchResult.data || [];
-        if (batch.length === 0) {
-          break;
-        }
+        // Execute parallel batches
+        const batchResults = await Promise.all(batchPromises);
         
-        // Process batch immediately
-        for (const school of batch) {
-          if (isTargetSchool(school)) targetCount++;
-          if (isVolunteerSchool(school)) notTargetCount++;
-          if (isGEIPAFSchool(school)) geipAFCount++;
-          if (isGEIPSchoolOnly(school)) geipSchoolCount++;
-          processedCount++;
+        // Process all batches
+        for (let i = 0; i < batchResults.length; i++) {
+          const batchResult = batchResults[i];
+          
+          if (!batchResult.success) {
+            logger.warn(`Failed to fetch schools batch at offset ${batchOffsets[i]}`, 'SCHOOLS', batchResult.error);
+            continue;
+          }
+          
+          const batch = batchResult.data || [];
+          if (batch.length === 0) {
+            hasMore = false;
+            break;
+          }
+          
+          // Process batch immediately
+          for (const school of batch) {
+            if (isTargetSchool(school)) targetCount++;
+            if (isVolunteerSchool(school)) notTargetCount++;
+            if (isGEIPAFSchool(school)) geipAFCount++;
+            if (isGEIPSchoolOnly(school)) geipSchoolCount++;
+            processedCount++;
+          }
         }
 
-        hasMore = batchResult.next !== null && batch.length === limit;
-        offset += limit;
+        offset += limit * maxConcurrentBatches;
+        
+        // Check if there are more pages
+        const lastBatchData = batchResults[batchResults.length - 1]?.data || [];
+        hasMore = lastBatchData.length === limit && 
+                  processedCount < total &&
+                  offset < total;
         
         // Early exit if we've processed all schools
         if (total > 0 && processedCount >= total) {
@@ -447,7 +516,7 @@ export const schoolsService = {
 
       logger.info(`Processed ${processedCount} schools for counts`, 'SCHOOLS');
 
-      return { 
+      const result = { 
         success: true, 
         total, 
         target: targetCount, 
@@ -455,6 +524,11 @@ export const schoolsService = {
         geipSchool: geipSchoolCount, 
         geipAF: geipAFCount 
       };
+
+      // Cache the result for 30 minutes
+      dataCache.set(cacheKey, result, 30 * 60 * 1000);
+      
+      return result;
     } catch (error: any) {
       logger.error('Get schools total count error', 'SCHOOLS', error);
       return { success: false, total: 0, target: 0, notTarget: 0, geipSchool: 0, geipAF: 0, error: error.message || 'Failed to fetch schools count' };

@@ -50,6 +50,11 @@ export const EXTERNAL_ENDPOINTS = {
     LIST: getEnv('EXTERNAL_API_SCHOOLS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/`),
     DETAIL: (id: string | number) => `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/${id}/`,
   },
+  STUDENTS: {
+    BASE: getEnv('EXTERNAL_API_STUDENTS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/students/`),
+    LIST: getEnv('EXTERNAL_API_STUDENTS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/students/`),
+    DETAIL: (id: string | number) => `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${id}/`,
+  },
 } as const;
 
 export const INTERNAL_ENDPOINTS = {

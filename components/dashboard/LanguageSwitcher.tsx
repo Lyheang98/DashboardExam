@@ -86,7 +86,9 @@ export function LanguageSwitcher() {
                 <span className={`font-medium ${lang.code === 'km' ? 'font-khmer' : ''}`}>
                   {lang.nativeName}
                 </span>
-                <span className="text-xs text-muted-foreground">{lang.name}</span>
+                <span className={`text-xs text-muted-foreground ${lang.code === 'km' ? 'font-khmer' : ''}`}>
+                  {lang.name}
+                </span>
               </div>
             </DropdownMenuItem>
           );

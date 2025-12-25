@@ -38,13 +38,15 @@ export interface DataTableProps<T> {
   data: T[];
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
+  getRowKey?: (row: T, index: number) => string | number;
 }
 
-function DataTableComponent<T extends { id: string | number }>({
+function DataTableComponent<T extends Record<string, any>>({
   columns,
   data,
   onEdit,
   onDelete,
+  getRowKey,
 }: DataTableProps<T>) {
   const { t } = useLanguage();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -66,8 +68,14 @@ function DataTableComponent<T extends { id: string | number }>({
 
   // Memoize rows to prevent unnecessary re-renders
   const tableRows = useMemo(() => {
-    return data.map((row) => (
-      <TableRow key={row.id}>
+    return data.map((row, index) => {
+      // Use custom key getter if provided, otherwise try id, then province_id, then index
+      const rowKey = getRowKey 
+        ? getRowKey(row, index)
+        : (row.id ?? row.province_id ?? row.district_id ?? row.school_id ?? index);
+      
+      return (
+      <TableRow key={rowKey}>
         {columns.map((column) => (
           <TableCell key={String(column.key)} className="px-6 py-4">
             {column.render
@@ -102,8 +110,9 @@ function DataTableComponent<T extends { id: string | number }>({
           </TableCell>
         )}
       </TableRow>
-    ));
-  }, [data, columns, onEdit, onDelete, t, handleDeleteClick]);
+      );
+    });
+  }, [data, columns, onEdit, onDelete, t, handleDeleteClick, getRowKey]);
 
   const handleConfirmDelete = () => {
     if (rowToDelete && onDelete) {

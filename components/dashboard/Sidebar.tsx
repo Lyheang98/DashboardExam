@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, ChevronDown, School } from "lucide-react";
+import { LayoutDashboard, Users, Settings, ChevronDown, School, GraduationCap, MapPin, Building2, Heart, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -19,12 +19,20 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
+  const [isDataExpanded, setIsDataExpanded] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-expand settings menu when on any settings page
   useEffect(() => {
     if (pathname.startsWith("/dashboard/setting")) {
       setIsSettingsExpanded(true);
+    }
+  }, [pathname]);
+
+  // Auto-expand data menu when on any data pages
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/student")) {
+      setIsDataExpanded(true);
     }
   }, [pathname]);
 
@@ -39,8 +47,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
   const menuItems = [
     { icon: LayoutDashboard, label: t.sidebar.dashboard, href: "/dashboard" },
-    { icon: Users, label: t.sidebar.users, href: "/dashboard/users" },
     { icon: School, label: t.sidebar.schools, href: "/dashboard/schools" },
+  ];
+
+  const dataMenuItems = [
+    { id: 'province', icon: MapPin, label: 'Province', href: '/dashboard/student/province' },
+    { id: 'district', icon: Map, label: 'District', href: '/dashboard/student/district' },
+    { id: 'school', icon: Building2, label: 'School', href: '/dashboard/student/school' },
+    { id: 'disability', icon: Heart, label: 'Disability', href: '/dashboard/student/disability' },
+    { id: 'students', icon: GraduationCap, label: 'Students', href: '/dashboard/student/students' },
   ];
 
   const settingsMenuItems = [
@@ -121,7 +136,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto space-y-2 p-4">
+          <nav className="flex-1 overflow-y-auto space-y-1 p-4">
             {menuItems.map((item) => {
               const Icon = item.icon;
 
@@ -129,19 +144,108 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <Link key={item.href} href={item.href} prefetch={true}>
                   <Button
                     variant="ghost"
-                    className="w-full justify-start gap-2 hover:bg-primary/20 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary"
+                    className={cn(
+                      "w-full justify-start gap-3 h-10 px-3",
+                      "hover:bg-primary/10 hover:text-primary",
+                      "dark:hover:bg-primary/10 dark:hover:text-primary",
+                      "transition-colors duration-200"
+                    )}
                     onClick={onClose}
                   >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="text-sm">{item.label}</span>
                   </Button>
                 </Link>
               );
             })}
 
+            {/* Data Management with Dropdown */}
+            <div 
+              className="space-y-0"
+              onMouseEnter={() => {
+                if (hoverTimeoutRef.current) {
+                  clearTimeout(hoverTimeoutRef.current);
+                }
+                setIsDataExpanded(true);
+              }}
+              onMouseLeave={() => {
+                hoverTimeoutRef.current = setTimeout(() => {
+                  setIsDataExpanded(false);
+                }, 200);
+              }}
+            >
+              <Button
+                variant="ghost"
+                onClick={() => setIsDataExpanded(!isDataExpanded)}
+                onMouseEnter={() => {
+                  if (hoverTimeoutRef.current) {
+                    clearTimeout(hoverTimeoutRef.current);
+                  }
+                  setIsDataExpanded(true);
+                }}
+                onMouseLeave={() => {
+                  hoverTimeoutRef.current = setTimeout(() => {
+                    setIsDataExpanded(false);
+                  }, 200);
+                }}
+                className={cn(
+                  "w-full justify-between h-10 px-3 gap-3",
+                  "hover:bg-primary/10 hover:text-primary",
+                  "dark:hover:bg-primary/10 dark:hover:text-primary",
+                  "transition-colors duration-200"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <GraduationCap className="h-4 w-4 shrink-0" />
+                  <span className="text-sm">Student</span>
+                </div>
+                <ChevronDown className={cn(
+                  "h-4 w-4 shrink-0 transition-transform duration-200 ease-in-out",
+                  isDataExpanded && "rotate-180"
+                )} />
+              </Button>
+
+              {/* Data Management Submenu */}
+              {isDataExpanded && (
+                <div 
+                  className="ml-6 space-y-0.5 mt-0 animate-in fade-in slide-in-from-top-2 duration-200"
+                  onMouseEnter={() => {
+                    if (hoverTimeoutRef.current) {
+                      clearTimeout(hoverTimeoutRef.current);
+                    }
+                    setIsDataExpanded(true);
+                  }}
+                  onMouseLeave={() => {
+                    hoverTimeoutRef.current = setTimeout(() => {
+                      setIsDataExpanded(false);
+                    }, 200);
+                  }}
+                >
+                  {dataMenuItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link key={item.id} href={item.href} prefetch={true}>
+                        <button
+                          onClick={onClose}
+                          className={cn(
+                            "w-full text-left h-9 px-3 rounded-md text-sm flex items-center gap-3",
+                            "transition-colors duration-200 ease-in-out",
+                            "hover:bg-primary/5 hover:text-primary text-muted-foreground dark:text-muted-foreground"
+                          )}
+                        >
+                          <Icon className="h-3.5 w-3.5 shrink-0" />
+                          <span>{item.label}</span>
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Settings with Dropdown */}
             <div 
-              className="space-y-1"
+              className="space-y-0"
               onMouseEnter={() => {
                 if (hoverTimeoutRef.current) {
                   clearTimeout(hoverTimeoutRef.current);
@@ -157,30 +261,59 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               <Button
                 variant="ghost"
                 onClick={() => setIsSettingsExpanded(!isSettingsExpanded)}
-                className="w-full justify-between hover:bg-primary/20 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary"
+                onMouseEnter={() => {
+                  if (hoverTimeoutRef.current) {
+                    clearTimeout(hoverTimeoutRef.current);
+                  }
+                  setIsSettingsExpanded(true);
+                }}
+                onMouseLeave={() => {
+                  hoverTimeoutRef.current = setTimeout(() => {
+                    setIsSettingsExpanded(false);
+                  }, 200);
+                }}
+                className={cn(
+                  "w-full justify-between h-10 px-3 gap-3",
+                  "hover:bg-primary/10 hover:text-primary",
+                  "dark:hover:bg-primary/10 dark:hover:text-primary",
+                  "transition-colors duration-200"
+                )}
               >
-                <div className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  {t.sidebar.settings}
+                <div className="flex items-center gap-3">
+                  <Settings className="h-4 w-4 shrink-0" />
+                  <span className="text-sm">{t.sidebar.settings}</span>
                 </div>
                 <ChevronDown className={cn(
-                  "h-4 w-4 transition-transform duration-200 ease-in-out",
+                  "h-4 w-4 shrink-0 transition-transform duration-200 ease-in-out",
                   isSettingsExpanded && "rotate-180"
                 )} />
               </Button>
 
               {/* Settings Submenu */}
               {isSettingsExpanded && (
-                <div className="ml-4 space-y-1 border-l pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div 
+                  className="ml-6 space-y-0.5 mt-0 animate-in fade-in slide-in-from-top-2 duration-200"
+                  onMouseEnter={() => {
+                    if (hoverTimeoutRef.current) {
+                      clearTimeout(hoverTimeoutRef.current);
+                    }
+                    setIsSettingsExpanded(true);
+                  }}
+                  onMouseLeave={() => {
+                    hoverTimeoutRef.current = setTimeout(() => {
+                      setIsSettingsExpanded(false);
+                    }, 200);
+                  }}
+                >
                   {settingsMenuItems.map((item) => {
                     return (
                       <Link key={item.id} href={item.href} prefetch={true}>
                         <button
                           onClick={onClose}
                           className={cn(
-                            "w-full text-left h-9 px-4 rounded-md text-sm font-medium",
+                            "w-full text-left h-9 px-3 rounded-md text-sm",
                             "transition-colors duration-200 ease-in-out",
-                            "hover:bg-primary/20 hover:text-primary dark:hover:bg-primary/20 dark:hover:text-primary text-muted-foreground"
+                            "hover:bg-primary/5 hover:text-primary text-muted-foreground dark:text-muted-foreground"
                           )}
                         >
                           {item.label}
