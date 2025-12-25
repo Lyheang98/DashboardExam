@@ -65,7 +65,7 @@ interface User {
 }
 
 export default function UsersPage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   // ============================================
   // STATE MANAGEMENT
   // ============================================
@@ -394,12 +394,12 @@ export default function UsersPage() {
               id="role-filter"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              <option value="">{t.users.allRoles}</option>
-              <option value="admin">{t.users.admin}</option>
-              <option value="user">{t.users.user}</option>
-              <option value="moderator">{t.users.moderator}</option>
+              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.users.allRoles}</option>
+              <option value="admin" className={language === 'km' ? 'font-khmer' : ''}>{t.users.admin}</option>
+              <option value="user" className={language === 'km' ? 'font-khmer' : ''}>{t.users.user}</option>
+              <option value="moderator" className={language === 'km' ? 'font-khmer' : ''}>{t.users.moderator}</option>
             </select>
           </div>
 
@@ -415,11 +415,11 @@ export default function UsersPage() {
               id="status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
             >
-              <option value="">{t.users.allStatuses}</option>
-              <option value="active">{t.common.active}</option>
-              <option value="inactive">{t.common.inactive}</option>
+              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.users.allStatuses}</option>
+              <option value="active" className={language === 'km' ? 'font-khmer' : ''}>{t.common.active}</option>
+              <option value="inactive" className={language === 'km' ? 'font-khmer' : ''}>{t.common.inactive}</option>
             </select>
           </div>
         </div>

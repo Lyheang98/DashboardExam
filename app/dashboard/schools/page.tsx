@@ -219,13 +219,13 @@ export default function SchoolsPage() {
     { 
       key: 'school_name', 
       label: t.schools.schoolName,
-      render: (value) => value ? <span className={language === 'km' ? 'font-khmer' : ''}>{value}</span> : '-',
+      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
     },
     {
       key: 'province_name',
       label: t.schools.province,
       render: (value) => value ? (
-        <span className={`text-primary font-semibold ${language === 'km' ? 'font-khmer' : ''}`}>
+        <span className="text-primary font-semibold font-khmer">
           {value}
         </span>
       ) : '-',
@@ -233,12 +233,12 @@ export default function SchoolsPage() {
     {
       key: 'district_name',
       label: t.schools.district,
-      render: (value) => value ? <span className={language === 'km' ? 'font-khmer' : ''}>{value}</span> : '-',
+      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
     },
     {
       key: 'school_type_h',
       label: t.schools.schoolType,
-      render: (value) => value ? <span className={language === 'km' ? 'font-khmer' : ''}>{value}</span> : '-',
+      render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
     },
     {
       key: 'is_target',
@@ -309,11 +309,11 @@ export default function SchoolsPage() {
               id="province-filter"
               value={provinceFilter}
               onChange={(e) => setProvinceFilter(e.target.value)}
-              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
+              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
             >
-              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allProvinces}</option>
+              <option value="" className="font-khmer">{t.schools.allProvinces}</option>
               {provinceList.map((province) => (
-                <option key={province.name} value={province.name} className={language === 'km' ? 'font-khmer' : ''}>
+                <option key={province.name} value={province.name} className="font-khmer">
                   {province.name} ({province.count})
                 </option>
               ))}
@@ -349,11 +349,11 @@ export default function SchoolsPage() {
               id="school-type-filter"
               value={schoolTypeFilter}
               onChange={(e) => setSchoolTypeFilter(e.target.value)}
-              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
+              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
             >
-              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allTypes}</option>
+              <option value="" className="font-khmer">{t.schools.allTypes}</option>
               {uniqueSchoolTypes.map((type) => (
-                <option key={type} value={type} className={language === 'km' ? 'font-khmer' : ''}>
+                <option key={type} value={type} className="font-khmer">
                   {type}
                 </option>
               ))}

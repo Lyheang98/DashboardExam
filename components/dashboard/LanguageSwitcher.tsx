@@ -82,11 +82,8 @@ export function LanguageSwitcher() {
               className={`transition-colors ${isActive ? 'bg-accent' : 'hover:bg-accent/50'}`}
               aria-selected={isActive}
             >
-              <div className="flex flex-col" style={{ fontFamily: lang.code === 'km' ? 'var(--font-kantumruy-pro)' : 'inherit' }}>
-                <span 
-                  className="font-medium" 
-                  style={{ fontFamily: lang.code === 'km' ? 'var(--font-kantumruy-pro)' : 'inherit' }}
-                >
+              <div className="flex flex-col">
+                <span className={`font-medium ${lang.code === 'km' ? 'font-khmer' : ''}`}>
                   {lang.nativeName}
                 </span>
                 <span className="text-xs text-muted-foreground">{lang.name}</span>
