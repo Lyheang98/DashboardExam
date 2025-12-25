@@ -18,11 +18,11 @@ export default function DistrictPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className={`text-3xl font-bold tracking-tight ${language === 'km' ? 'font-khmer' : ''}`}>
-          District
+        <h1 className={`text-2xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+          {language === 'km' ? 'ស្រុក' : 'District'}
         </h1>
         <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
-          Manage and view district information
+          {language === 'km' ? 'គ្រប់គ្រង និងមើលព័ត៌មានស្រុក' : 'Manage and view district information'}
         </p>
       </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { getToken } from '@/lib/auth';
 import { Loading } from '@/components/ui/Loading';
 import { DataTable, DataTableColumn } from '@/components/dashboard/DataTable';
 import { logger } from '@/lib/logger';
+import { dataCache } from '@/lib/cache/dataCache';
 
 interface ProvinceData {
   province_id: string;
@@ -28,11 +29,10 @@ export default function ProvincePage() {
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(true); // Show loading initially
   const [provinces, setProvinces] = useState<ProvinceData[]>([]);
-  const [allProvinces, setAllProvinces] = useState<ProvinceData[]>([]); // Store all provinces for total calculation
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [total, setTotal] = useState(0);
-  const [totalStudents, setTotalStudents] = useState(0); // Total students from API
+  const [totalStudents, setTotalStudents] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [provinceIdQuery, setProvinceIdQuery] = useState('');
@@ -40,7 +40,6 @@ export default function ProvincePage() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const provinceIdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const allProvincesAbortControllerRef = useRef<AbortController | null>(null);
 
   // Debounce search by province name - reduced to 300ms for faster response
   useEffect(() => {
@@ -76,54 +75,6 @@ export default function ProvincePage() {
     };
   }, [provinceIdQuery]);
 
-  // Fetch all provinces for total calculation (without pagination/filters)
-  const fetchAllProvinces = useCallback(async () => {
-    // Cancel previous request if still pending
-    if (allProvincesAbortControllerRef.current) {
-      allProvincesAbortControllerRef.current.abort();
-    }
-    
-    // Create new abort controller for this request
-    const abortController = new AbortController();
-    allProvincesAbortControllerRef.current = abortController;
-    
-    try {
-      const token = getToken();
-      if (!token) {
-        return;
-      }
-
-      // Fetch all provinces without pagination or filters for accurate total
-      const response = await fetch(`/api/students/provinces?limit=1000&offset=0`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        signal: abortController.signal,
-        cache: 'no-store',
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.data && Array.isArray(result.data)) {
-        setAllProvinces(result.data);
-        // Update total students from API response if available
-        if (result.total_students !== undefined) {
-          setTotalStudents(result.total_students);
-        }
-      }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        return;
-      }
-      logger.error('Failed to fetch all provinces for total', 'PROVINCE', error);
-    }
-  }, []);
-
   // Fetch provinces - optimized with request cancellation and error handling
   const fetchProvinces = useCallback(async () => {
     // Cancel previous request if still pending
@@ -135,12 +86,18 @@ export default function ProvincePage() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     
+    // Set loading immediately for consistent UX
+    setLoading(true);
+    const startTime = Date.now();
+    const minLoadingTime = 300; // Minimum loading time for smooth UX
+    
     try {
-      setLoading(true);
       const token = getToken();
       if (!token) {
         logger.warn('No token available for province fetch', 'PROVINCE');
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
         return;
       }
 
@@ -173,18 +130,32 @@ export default function ProvincePage() {
 
       const result = await response.json();
 
+      // Check if request was cancelled
+      if (abortController.signal.aborted) {
+        return;
+      }
+
       if (result.success) {
         if (result.data && Array.isArray(result.data)) {
-          setProvinces(result.data);
-          setTotal(result.count || result.data.length);
-          // Use total_students from API if available
-          if (result.total_students !== undefined) {
-            setTotalStudents(result.total_students);
+          // Ensure minimum loading time for smooth UX
+          const elapsedTime = Date.now() - startTime;
+          const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+          await new Promise(resolve => setTimeout(resolve, remainingTime));
+
+          // Double-check request wasn't cancelled during wait
+          if (!abortController.signal.aborted) {
+            setProvinces(result.data);
+            setTotal(result.count || result.data.length);
+            // Also update total students if available in response
+            if (result.total_students !== undefined) {
+              setTotalStudents(result.total_students);
+            }
           }
         } else {
-          setProvinces([]);
-          setTotal(0);
-          setTotalStudents(0);
+          if (!abortController.signal.aborted) {
+            setProvinces([]);
+            setTotal(0);
+          }
         }
       } else {
         throw new Error(result.error || 'Failed to fetch data');
@@ -195,8 +166,10 @@ export default function ProvincePage() {
         return;
       }
       logger.error('Failed to fetch provinces', 'PROVINCE', error);
-      setProvinces([]);
-      setTotal(0);
+      if (!abortController.signal.aborted) {
+        setProvinces([]);
+        setTotal(0);
+      }
     } finally {
       if (!abortController.signal.aborted) {
         setLoading(false);
@@ -204,23 +177,12 @@ export default function ProvincePage() {
     }
   }, [page, perPage, debouncedSearch, debouncedProvinceId]);
 
-  // Fetch all provinces once on mount and when filters change (for accurate total)
-  useEffect(() => {
-    fetchAllProvinces();
-    
-    return () => {
-      if (allProvincesAbortControllerRef.current) {
-        allProvincesAbortControllerRef.current.abort();
-      }
-    };
-  }, [fetchAllProvinces, debouncedSearch, debouncedProvinceId]);
-
   useEffect(() => {
     // Set loading to true only when actually fetching
     setLoading(true);
     fetchProvinces();
     
-    // Cleanup: abort request if component unmounts or dependencies change
+    // Cleanup: abort request if component unmount or dependencies change
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -228,18 +190,72 @@ export default function ProvincePage() {
     };
   }, [fetchProvinces]);
 
-  // Calculate total students - use API value if available, otherwise sum from all provinces
-  const displayTotalStudents = useMemo(() => {
-    if (totalStudents > 0) {
-      return totalStudents; // Use API value if available
-    }
-    // Fallback: calculate from all provinces
-    if (allProvinces.length > 0) {
-      return allProvinces.reduce((sum, province) => sum + (province.total_count || 0), 0);
-    }
-    // Last fallback: calculate from current page provinces
-    return provinces.reduce((sum, province) => sum + (province.total_count || 0), 0);
-  }, [totalStudents, allProvinces, provinces]);
+  // Fetch total students count from 25 provinces (if not already fetched from API response)
+  useEffect(() => {
+    if (totalStudents > 0) return; // Skip if already have the value from API response
+    
+    const controller = new AbortController();
+    let isMounted = true;
+
+    const fetchTotalStudents = async () => {
+      try {
+        const token = getToken();
+        if (!token) {
+          logger.warn('No token available for students fetch', 'PROVINCE');
+          return;
+        }
+
+        // Check cache first
+        const cacheKey = 'province_summary:total_students';
+        const cached = dataCache.get<number>(cacheKey);
+        if (cached !== null && cached !== undefined) {
+          if (isMounted && !controller.signal.aborted) {
+            setTotalStudents(cached);
+          }
+          return;
+        }
+
+        // Fetch with minimal params to get total_students
+        const response = await fetch('/api/students/provinces?limit=1&offset=0', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (isMounted && !controller.signal.aborted) {
+          if (data.success && data.total_students !== undefined) {
+            const total = data.total_students;
+            setTotalStudents(total);
+            // Cache for 30 minutes
+            dataCache.set(cacheKey, total, 30 * 60 * 1000);
+            logger.info(`Total students fetched: ${total}`, 'PROVINCE');
+          } else {
+            setTotalStudents(0);
+          }
+        }
+      } catch (error: any) {
+        if (isMounted && error?.name !== 'AbortError') {
+          logger.error('Failed to fetch total students', 'PROVINCE', error);
+          setTotalStudents(0);
+        }
+      }
+    };
+
+    fetchTotalStudents();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [totalStudents]);
 
   // Table columns
   const provinceColumns: DataTableColumn<ProvinceData>[] = [
@@ -275,85 +291,73 @@ export default function ProvincePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className={`text-3xl font-bold tracking-tight ${language === 'km' ? 'font-khmer' : ''}`}>
-            Province
-          </h1>
-          <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
-            View student counts aggregated by province
-          </p>
-        </div>
-        {/* Small attractive card for total students */}
-        <Card className="w-auto min-w-[110px] border-primary/20 bg-primary/5 dark:bg-primary/10">
-          <CardContent className="p-2.5">
-            <div className={`text-sm font-bold text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-              {loading ? '...' : displayTotalStudents.toLocaleString()}
-            </div>
-            <p className={`text-[10px] text-muted-foreground mt-0.5 leading-tight ${language === 'km' ? 'font-khmer' : ''}`}>
-              Total Students
-            </p>
-            <p className={`text-[9px] text-muted-foreground/70 mt-0.5 ${language === 'km' ? 'font-khmer' : ''}`}>
-              25 Provinces
-            </p>
-          </CardContent>
-        </Card>
+      <div className="mt-6">
+        <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+          {language === 'km' ? 'តម្រងខេត្ត' : 'Filter Province'}
+        </h1>
+        <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+          {language === 'km' 
+            ? 'មើលចំនួនសិស្សដែលបានបូកសរុបតាមខេត្ត'
+            : 'View student counts aggregated by province'
+          }
+        </p>
       </div>
 
       {/* Filters Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className={language === 'km' ? 'font-khmer' : ''}>
-            Filters
-          </CardTitle>
-          <CardDescription className={language === 'km' ? 'font-khmer' : ''}>
-            Search and filter provinces
-          </CardDescription>
-        </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="search" className={language === 'km' ? 'font-khmer' : ''}>
-                Search Province Name
+              <Label htmlFor="search" className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+                {language === 'km' ? 'ស្វែងរកឈ្មោះខេត្ត' : 'Search Province Name'}
               </Label>
               <Input
                 id="search"
-                placeholder="Search by province name..."
+                placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះខេត្ត...' : 'Search by province name...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={language === 'km' ? 'font-khmer' : ''}
+                className="w-full font-khmer"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="provinceId" className={language === 'km' ? 'font-khmer' : ''}>
-                Search Province ID
+              <Label htmlFor="provinceId" className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+                {language === 'km' ? 'ស្វែងរកលេខសម្គាល់ខេត្ត' : 'Search Province ID'}
               </Label>
               <Input
                 id="provinceId"
-                placeholder="Search by province ID..."
+                placeholder={language === 'km' ? 'ស្វែងរកតាមលេខសម្គាល់ខេត្ត...' : 'Search by province ID...'}
                 value={provinceIdQuery}
                 onChange={(e) => setProvinceIdQuery(e.target.value)}
-                className={language === 'km' ? 'font-khmer' : ''}
+                className="w-full font-khmer"
               />
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* ============================================ */}
+      {/* PAGE HEADER ABOVE TABLE */}
+      {/* ============================================ */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' ? 'ខេត្ត' : 'Province'}
+          </h1>
+          <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' 
+              ? `${t.common.showing} ${totalStudents.toLocaleString()} ${language === 'km' ? 'សិស្ស' : 'students'} ${language === 'km' ? 'នៅក្នុង' : 'in'} 25 ${language === 'km' ? 'ខេត្ត' : 'provinces'}`
+              : `${t.common.showing} ${totalStudents.toLocaleString()} students in 25 provinces`
+            }
+          </p>
+        </div>
+      </div>
+
       {/* Table Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className={language === 'km' ? 'font-khmer' : ''}>
-            Provinces
-          </CardTitle>
-          <CardDescription className={language === 'km' ? 'font-khmer' : ''}>
-            Showing {provinces.length} of {total} provinces
-          </CardDescription>
-        </CardHeader>
         <CardContent>
           {loading ? (
-            <Loading />
+            <Loading language={language} />
           ) : provinces.length > 0 ? (
             <>
               <DataTable
@@ -364,8 +368,8 @@ export default function ProvincePage() {
               {/* Pagination */}
               <div className="flex items-center justify-between mt-4 pt-4 border-t">
                 {/* Left: Showing X-Y of Z */}
-                <div className="text-sm text-muted-foreground">
-                  Showing {((page - 1) * perPage) + 1}–{Math.min(page * perPage, total)} of {total}
+                <div className={`text-sm text-muted-foreground ${language === 'km' ? 'font-khmer' : ''}`}>
+                  {t.common.showing} {((page - 1) * perPage) + 1}–{Math.min(page * perPage, total)} {t.common.of} {total}
                 </div>
                 
                 {/* Right: Previous, Page X of Y, Next, Items per page */}
@@ -375,12 +379,13 @@ export default function ProvincePage() {
                     size="sm"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1 || loading}
+                    className={language === 'km' ? 'font-khmer' : ''}
                   >
-                    Previous
+                    {t.common.prev}
                   </Button>
                   
-                  <div className="px-3 text-sm text-muted-foreground">
-                    Page {page} of {totalPages}
+                  <div className={`px-3 text-sm text-muted-foreground ${language === 'km' ? 'font-khmer' : ''}`}>
+                    {t.common.page} {page} {t.common.of} {totalPages}
                   </div>
                   
                   <Button
@@ -388,8 +393,9 @@ export default function ProvincePage() {
                     size="sm"
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages || loading}
+                    className={language === 'km' ? 'font-khmer' : ''}
                   >
-                    Next
+                    {t.common.next}
                   </Button>
                   
                   <Select
@@ -399,12 +405,12 @@ export default function ProvincePage() {
                       setPage(1);
                     }}
                   >
-                    <SelectTrigger className="w-20 h-9">
+                    <SelectTrigger className={`w-20 h-9 ${language === 'km' ? 'font-khmer' : ''}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="10" className={language === 'km' ? 'font-khmer' : ''}>10</SelectItem>
+                      <SelectItem value="25" className={language === 'km' ? 'font-khmer' : ''}>25</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -413,7 +419,7 @@ export default function ProvincePage() {
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <p className={language === 'km' ? 'font-khmer' : ''}>
-                No provinces found
+                {language === 'km' ? 'រកមិនឃើញខេត្ត' : 'No provinces found'}
               </p>
             </div>
           )}

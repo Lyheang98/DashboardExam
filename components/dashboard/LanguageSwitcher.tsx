@@ -74,19 +74,21 @@ export function LanguageSwitcher() {
       >
         {AVAILABLE_LANGUAGES.map((lang) => {
           const isActive = lang.code === language;
+          const isKhmer = lang.code === 'km';
           
           return (
             <DropdownMenuItem
               key={lang.code}
               onClick={() => handleLanguageChange(lang.code)}
-              className={`transition-colors ${isActive ? 'bg-accent' : 'hover:bg-accent/50'}`}
+              className={`transition-colors ${isActive ? 'bg-accent' : 'hover:bg-accent/50'} ${isKhmer ? 'font-khmer' : ''}`}
               aria-selected={isActive}
+              lang={isKhmer ? 'km' : undefined}
             >
-              <div className="flex flex-col">
-                <span className={`font-medium ${lang.code === 'km' ? 'font-khmer' : ''}`}>
+              <div className={`flex flex-col ${isKhmer ? 'font-khmer' : ''}`}>
+                <span className={`font-medium ${isKhmer ? 'font-khmer' : ''}`} lang={isKhmer ? 'km' : undefined}>
                   {lang.nativeName}
                 </span>
-                <span className={`text-xs text-muted-foreground ${lang.code === 'km' ? 'font-khmer' : ''}`}>
+                <span className={`text-xs text-muted-foreground ${isKhmer ? 'font-khmer' : ''}`} lang={isKhmer ? 'km' : undefined}>
                   {lang.name}
                 </span>
               </div>

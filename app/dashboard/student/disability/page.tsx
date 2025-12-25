@@ -18,11 +18,11 @@ export default function DisabilityPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className={`text-3xl font-bold tracking-tight ${language === 'km' ? 'font-khmer' : ''}`}>
-          Disability
+        <h1 className={`text-2xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+          {language === 'km' ? 'ពិការភាព' : 'Disability'}
         </h1>
         <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
-          Manage and view disability information
+          {language === 'km' ? 'គ្រប់គ្រង និងមើលព័ត៌មានពិការភាព' : 'Manage and view disability information'}
         </p>
       </div>
 

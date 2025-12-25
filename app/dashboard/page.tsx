@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react';
-import { Users, Package, TrendingUp, DollarSign, School } from 'lucide-react';
+import { Users, Package, TrendingUp, DollarSign, School, GraduationCap } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
 import { DataControls } from '@/components/dashboard/DataControls';
 import { useLanguage } from '@/lib/i18n/context';
@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [notTargetSchools, setNotTargetSchools] = useState<number>(0);
   const [geipSchools, setGeipSchools] = useState<number>(0);
   const [geipAFSchools, setGeipAFSchools] = useState<number>(0);
+  const [totalStudents, setTotalStudents] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // Force refresh trigger
   const [usersGran, setUsersGran] = useState<Granularity>(DEFAULT_GRANULARITY);
@@ -89,7 +90,7 @@ export default function DashboardPage() {
 
     loadData();
 
-    // Cleanup: cancel request if component unmounts or dependencies change
+    // Cleanup: cancel request if component unmount or dependencies change
     return () => {
       isMounted = false;
       controller.abort();
@@ -197,10 +198,78 @@ export default function DashboardPage() {
     };
   }, [mounted, refreshKey]);
 
+  // Fetch total students count from 25 provinces
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const controller = new AbortController();
+    let isMounted = true;
+
+    const fetchTotalStudents = async () => {
+      try {
+        const token = getToken();
+        if (!token) {
+          logger.warn('No token available for students fetch', 'DASHBOARD');
+          return;
+        }
+
+        // Check cache first
+        const cacheKey = 'province_summary:total_students';
+        const cached = dataCache.get<number>(cacheKey);
+        if (cached !== null && cached !== undefined) {
+          if (isMounted && !controller.signal.aborted) {
+            setTotalStudents(cached);
+          }
+          return;
+        }
+
+        // Fetch with minimal params to get total_students
+        const response = await fetch('/api/students/provinces?limit=1&offset=0', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (isMounted && !controller.signal.aborted) {
+          if (data.success && data.total_students !== undefined) {
+            const total = data.total_students;
+            setTotalStudents(total);
+            // Cache for 30 minutes (same as province summary)
+            dataCache.set(cacheKey, total, 30 * 60 * 1000);
+            logger.info(`Total students fetched: ${total}`, 'DASHBOARD');
+          } else {
+            setTotalStudents(0);
+          }
+        }
+      } catch (error: any) {
+        if (isMounted && error?.name !== 'AbortError') {
+          logger.error('Failed to fetch total students', 'DASHBOARD', error);
+          setTotalStudents(0);
+        }
+      }
+    };
+
+    fetchTotalStudents();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [mounted, refreshKey]);
+
   // Handler for refresh button
   const handleRefresh = () => {
     // Clear cache first
     dataCache.delete(CACHE_KEYS.SCHOOLS_COUNT);
+    dataCache.delete('province_summary:total_students');
     // Trigger re-fetch
     setRefreshKey(prev => prev + 1);
   };
@@ -296,6 +365,13 @@ export default function DashboardPage() {
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Stats Cards - Continuous Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-3 mb-4 sm:mb-6">
+        <StatCard
+          title="Total Students"
+          value={totalStudents.toLocaleString()}
+          description="25 Provinces"
+          icon={GraduationCap}
+          trend={{ value: 4, isPositive: true }}
+        />
         <StatCard
           title={t.dashboard.schools}
           value={totalSchools}

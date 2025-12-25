@@ -12,7 +12,7 @@ import {
 import { dataCache, CACHE_KEYS } from '@/lib/cache/dataCache';
 import { cacheHandlers } from '@/lib/cache/cacheHandlers';
 import { useToast } from '@/components/ui/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface DataControlsProps {
   onRefresh?: () => void;
@@ -22,9 +22,15 @@ interface DataControlsProps {
 
 export function DataControls({ onRefresh, onWarmCache, onClearCache }: DataControlsProps) {
   const { showToast } = useToast();
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [hoverColor, setHoverColor] = useState<'blue' | 'green' | 'red' | null>(null);
   const [hoveredItem, setHoveredItem] = useState<'refresh' | 'warm' | 'clear' | null>(null);
+
+  // Prevent hydration mismatch by only rendering on client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleRefresh = () => {
     showToast('Fetching fresh data...', 'info');
@@ -83,6 +89,21 @@ export function DataControls({ onRefresh, onWarmCache, onClearCache }: DataContr
       globalHandler();
     }
   };
+
+  // Prevent hydration mismatch - only render on client
+  if (!mounted) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="icon"
+        className="relative group"
+        disabled
+      >
+        <Database className="h-4 w-4 text-muted-foreground" />
+        <span className="sr-only">Data Management</span>
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

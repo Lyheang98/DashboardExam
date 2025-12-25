@@ -162,6 +162,11 @@
     @apply bg-background text-foreground font-sans;
   }
 
+  /* Make Khmer text slightly larger - set at root level to avoid compounding */
+  html.lang-khmer {
+    font-size: 110%; /* Make Khmer text 10% larger globally */
+  }
+
   /* Ensure Khmer font takes precedence on body when language is Khmer */
   html.lang-khmer body {
     font-family: var(--font-kantumruy-pro) !important;
@@ -252,9 +257,83 @@
     font-family: var(--font-kantumruy-pro) !important;
   }
 
-  /* Force Kantumruy Pro for Khmer text in language switcher dropdown */
+  /* Ensure language switcher dropdown uses Kantumruy for Khmer text - ALWAYS, regardless of current language */
+  [data-radix-dropdown-menu-content] .font-khmer,
+  [data-radix-dropdown-menu-content] [class*="font-khmer"],
+  [role="menuitem"].font-khmer,
+  [role="menuitem"] .font-khmer,
+  [role="menuitem"] [class*="font-khmer"],
+  [data-radix-dropdown-menu-content] .font-khmer *,
+  [data-radix-dropdown-menu-content] .font-khmer span,
+  [data-radix-dropdown-menu-content] .font-khmer div,
+  [role="menuitem"].font-khmer *,
+  [role="menuitem"] .font-khmer *,
+  [role="menuitem"] .font-khmer span,
+  [role="menuitem"] .font-khmer div {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Ensure any input/search in language switcher uses Kantumruy for Khmer */
+  [data-radix-dropdown-menu-content] input.font-khmer,
+  [data-radix-dropdown-menu-content] input[class*="font-khmer"],
+  [role="menu"] input.font-khmer,
+  [role="menu"] input[class*="font-khmer"] {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Force Kantumruy Pro for Khmer text in language switcher dropdown - regardless of current language */
   [data-radix-dropdown-menu-content] [lang="km"],
-  [role="menuitem"] [lang="km"] {
+  [data-radix-dropdown-menu-content] [lang="km"] *,
+  [data-radix-dropdown-menu-content] [lang="km"] span,
+  [data-radix-dropdown-menu-content] [lang="km"] div,
+  [role="menuitem"] [lang="km"],
+  [role="menuitem"] [lang="km"] *,
+  [role="menuitem"] [lang="km"] span,
+  [role="menuitem"] [lang="km"] div {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+  
+  /* Universal rule: Any element with font-khmer class in language switcher and all children */
+  [data-radix-dropdown-menu-content] *[class*="font-khmer"],
+  [data-radix-dropdown-menu-content] *[class*="font-khmer"] *,
+  [data-radix-dropdown-menu-content] *[class*="font-khmer"] span,
+  [data-radix-dropdown-menu-content] *[class*="font-khmer"] div {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Ensure select elements and options use Kantumruy for Khmer - ALWAYS */
+  html.lang-khmer select.font-khmer,
+  html.lang-khmer select.font-khmer option,
+  .font-khmer select,
+  .font-khmer select option,
+  select.font-khmer,
+  select.font-khmer option,
+  select.font-khmer *,
+  option.font-khmer,
+  option.font-khmer * {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+  
+  /* Force Kantumruy for all select/option elements with font-khmer class, regardless of language */
+  select[class*="font-khmer"],
+  select[class*="font-khmer"] option,
+  option[class*="font-khmer"] {
+    font-family: var(--font-kantumruy-pro) !important;
+  }
+
+  /* Ensure input fields use Kantumruy for Khmer text - ALWAYS */
+  html.lang-khmer input.font-khmer,
+  html.lang-khmer input[class*="font-khmer"],
+  .font-khmer input,
+  input.font-khmer,
+  input[class*="font-khmer"],
+  input.font-khmer::placeholder,
+  input[class*="font-khmer"]::placeholder,
+  /* Ensure typed text in input fields uses Kantumruy */
+  input.font-khmer[type="text"],
+  input.font-khmer[type="search"],
+  input[class*="font-khmer"][type="text"],
+  input[class*="font-khmer"][type="search"] {
     font-family: var(--font-kantumruy-pro) !important;
   }
 }

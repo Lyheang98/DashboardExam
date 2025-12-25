@@ -20,11 +20,13 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, DataTableColumn } from "@/components/dashboard/DataTable";
 import { logger } from "@/lib/logger";
 import { useLanguage } from "@/lib/i18n/context";
 import { getToken } from "@/lib/auth";
 import { Loading } from "@/components/ui/Loading";
+import { dataCache } from "@/lib/cache/dataCache";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -53,14 +55,17 @@ export default function SchoolsPage() {
   // ============================================
 
   // Data state
-  const [schools, setSchools] = useState<School[]>([]);
+  const [allSchools, setAllSchools] = useState<School[]>([]); // Cache all schools for client-side filtering
+  const [schools, setSchools] = useState<School[]>([]); // Filtered schools
   const [loading, setLoading] = useState(true); // Show loading initially
   const [mounted, setMounted] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // Track if we need to fetch all data
 
   // Pagination state
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [total, setTotal] = useState(0);
+  const [totalStudents, setTotalStudents] = useState<number>(0);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,19 +75,32 @@ export default function SchoolsPage() {
   const [targetFilter, setTargetFilter] = useState("");
 
   // ============================================
-  // PERFORMANCE OPTIMIZATION: Search Debouncing
+  // PERFORMANCE OPTIMIZATION: Debouncing & Request Management
   // ============================================
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [debouncedFilters, setDebouncedFilters] = useState({
+    province: "",
+    district: "",
+    schoolType: "",
+    target: "",
+  });
 
+  // Debounce search query (300ms for faster response)
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     searchTimeoutRef.current = setTimeout(() => {
+      // Only reset page if search actually changed
+      if (searchQuery !== debouncedSearchQuery) {
+        setPage(1);
+      }
       setDebouncedSearchQuery(searchQuery);
-    }, 500);
+    }, 300);
 
     return () => {
       if (searchTimeoutRef.current) {
@@ -91,40 +109,108 @@ export default function SchoolsPage() {
     };
   }, [searchQuery]);
 
+  // Debounce filter changes - faster for school type (200ms), normal for others (300ms)
+  useEffect(() => {
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
+    
+    // Use shorter debounce if only school type changed (small dataset, fast filter)
+    const isOnlySchoolTypeChange = schoolTypeFilter !== debouncedFilters.schoolType &&
+      provinceFilter === debouncedFilters.province &&
+      districtFilter === debouncedFilters.district &&
+      targetFilter === debouncedFilters.target;
+    
+    const debounceTime = isOnlySchoolTypeChange ? 200 : 300;
+    
+    filterTimeoutRef.current = setTimeout(() => {
+      const newFilters = {
+        province: provinceFilter,
+        district: districtFilter,
+        schoolType: schoolTypeFilter,
+        target: targetFilter,
+      };
+      
+      // Check if filters actually changed
+      const filtersChanged = 
+        newFilters.province !== debouncedFilters.province ||
+        newFilters.district !== debouncedFilters.district ||
+        newFilters.schoolType !== debouncedFilters.schoolType ||
+        newFilters.target !== debouncedFilters.target;
+      
+      setDebouncedFilters(newFilters);
+      
+      // Reset to first page only if filters actually changed
+      if (filtersChanged) {
+        setPage(1);
+      }
+    }, debounceTime);
+
+    return () => {
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current);
+      }
+    };
+  }, [provinceFilter, districtFilter, schoolTypeFilter, targetFilter, debouncedFilters]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   // ============================================
-  // API CALLS
+  // API CALLS - Optimized with Request Cancellation
   // ============================================
 
-  const fetchSchools = async () => {
-    setLoading(true);
+  const fetchSchools = useCallback(async () => {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+      // Set loading immediately for consistent UX
+      setLoading(true);
+      const startTime = Date.now();
+      // Use shorter minimum loading time for simple filters (school type, target)
+      const hasSimpleFilterOnly = debouncedFilters.schoolType && 
+        !debouncedSearchQuery && 
+        !debouncedFilters.province && 
+        !debouncedFilters.district;
+      const minLoadingTime = hasSimpleFilterOnly ? 150 : 300; // Faster for simple filters
 
     try {
       const token = getToken();
       if (!token) {
         logger.warn('No token available for schools fetch', 'SCHOOLS');
-        setSchools([]);
-        setTotal(0);
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setSchools([]);
+          setTotal(0);
+          setLoading(false);
+        }
         return;
       }
 
+      // If we have cached data, skip API call and use client-side filtering
+      if (allSchools.length > 0 && !isInitialLoad) {
+        // Skip API call, use client-side filtering - instant response
+        setLoading(false);
+        return;
+      }
+      
+      // Otherwise, make API call to fetch all schools (no filters on initial load)
       const params = new URLSearchParams();
-      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
-      if (provinceFilter) params.append("province", provinceFilter);
-      if (districtFilter) params.append("district", districtFilter);
-      if (schoolTypeFilter) params.append("school_type", schoolTypeFilter);
-      if (targetFilter) params.append("is_target", targetFilter);
-      // No limit param - the service will fetch all schools using pagination
+      // Don't send filters on initial load - fetch all schools for client-side filtering
 
       const response = await fetch(`/api/schools/search?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        signal: abortController.signal,
+        cache: 'no-store', // Ensure fresh data
       });
 
       if (!response.ok) {
@@ -133,6 +219,11 @@ export default function SchoolsPage() {
 
       const data = await response.json();
 
+      // Check if request was cancelled
+      if (abortController.signal.aborted) {
+        return;
+      }
+
       // Log the response for debugging
       if (!data.success) {
         logger.error('API returned error', 'SCHOOLS', data.error);
@@ -140,58 +231,270 @@ export default function SchoolsPage() {
       }
 
       // Use the data directly from the API - it's already formatted by schoolsService
-      const allSchools: School[] = data.data || [];
+      const fetchedSchools: School[] = data.data || [];
 
-      logger.info(`Fetched ${allSchools.length} schools, count: ${data.count}`, 'SCHOOLS');
+      logger.info(`Fetched ${fetchedSchools.length} schools, count: ${data.count}`, 'SCHOOLS');
 
-      setSchools(allSchools);
-      // Use the count from API which should be the accurate total (1825)
-      // If count is not provided, use the length of returned schools
-      setTotal(data.count || allSchools.length);
-    } catch (error) {
+      // Ensure minimum loading time for smooth UX
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+
+      await new Promise(resolve => setTimeout(resolve, remainingTime));
+
+      // Double-check request wasn't cancelled during wait
+      if (!abortController.signal.aborted) {
+        // Always cache all schools for client-side filtering (data is small)
+        if (isInitialLoad) {
+          setAllSchools(fetchedSchools);
+          setIsInitialLoad(false);
+        }
+        
+        setSchools(fetchedSchools);
+        setTotal(data.count || fetchedSchools.length);
+      }
+    } catch (error: any) {
+      // Ignore abort errors (cancelled requests)
+      if (error.name === 'AbortError') {
+        return;
+      }
       logger.error("Failed to fetch schools", "SCHOOLS", error);
-      setSchools([]);
-      setTotal(0);
+      if (!abortController.signal.aborted) {
+        setSchools([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+      }
     }
-  };
+  }, [debouncedSearchQuery, debouncedFilters, allSchools, isInitialLoad]);
 
   useEffect(() => {
     if (mounted) {
       fetchSchools();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchQuery, provinceFilter, districtFilter, schoolTypeFilter, targetFilter, mounted]);
+
+    // Cleanup: abort request if component unmount or dependencies change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [mounted, fetchSchools]);
+
+
+  // Fetch total students count from 25 provinces
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const controller = new AbortController();
+    let isMounted = true;
+
+    const fetchTotalStudents = async () => {
+      try {
+        const token = getToken();
+        if (!token) {
+          logger.warn('No token available for students fetch', 'SCHOOLS');
+          return;
+        }
+
+        // Check cache first
+        const cacheKey = 'province_summary:total_students';
+        const cached = dataCache.get<number>(cacheKey);
+        if (cached !== null && cached !== undefined) {
+          if (isMounted && !controller.signal.aborted) {
+            setTotalStudents(cached);
+          }
+          return;
+        }
+
+        // Fetch with minimal params to get total_students
+        const response = await fetch('/api/students/provinces?limit=1&offset=0', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (isMounted && !controller.signal.aborted) {
+          if (data.success && data.total_students !== undefined) {
+            const total = data.total_students;
+            setTotalStudents(total);
+            // Cache for 30 minutes (same as province summary)
+            dataCache.set(cacheKey, total, 30 * 60 * 1000);
+            logger.info(`Total students fetched: ${total}`, 'SCHOOLS');
+          } else {
+            setTotalStudents(0);
+          }
+        }
+      } catch (error: any) {
+        if (isMounted && error?.name !== 'AbortError') {
+          logger.error('Failed to fetch total students', 'SCHOOLS', error);
+          setTotalStudents(0);
+        }
+      }
+    };
+
+    fetchTotalStudents();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [mounted]);
 
   // ============================================
   // COMPUTED VALUES (Memoized)
   // ============================================
 
+  // Helper function to determine if a school is target (matches backend logic)
+  const isTargetSchool = useCallback((school: School): boolean => {
+    const typeH = (school.school_type_h || '').toString();
+    const typeK = (school.school_type_k || '').toString();
+    
+    // Check if school_type contains "សាលាគោលដៅ" (target school)
+    if (typeH.includes('សាលាគោលដៅ') || typeK.includes('សាលាគោលដៅ')) {
+      return true;
+    }
+    
+    // Also check for SRS or NET-SRS as they might be target schools
+    if (typeH.includes('SRS') || typeH.includes('NET-SRS')) {
+      // But exclude volunteer schools
+      if (typeH.includes('សាលាស្ម័គ្រចិត្ត') || typeK.includes('សាលាស្ម័គ្រចិត្ត')) {
+        return false;
+      }
+      return true;
+    }
+    
+    // Only use API fields if school_type doesn't exist
+    if (!typeH && !typeK) {
+      if (school.is_target !== undefined) return school.is_target === true;
+      if (school.target !== undefined) return school.target === true;
+    }
+    
+    // Default to not target
+    return false;
+  }, []);
+
+  // Client-side filtering - always use this after initial load since data is small
+  const filteredSchools = useMemo(() => {
+    // Use allSchools if available (cached), otherwise use schools from API
+    const sourceData = allSchools.length > 0 ? allSchools : schools;
+    let filtered = [...sourceData];
+    
+    // Apply search filter (school name)
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(s => {
+        const name = (s.school_name || '').toLowerCase();
+        return name.includes(query);
+      });
+    }
+    
+    // Apply province filter
+    if (debouncedFilters.province) {
+      filtered = filtered.filter(s => {
+        const province = (s.province_name || '').toLowerCase();
+        return province.includes(debouncedFilters.province.toLowerCase());
+      });
+    }
+    
+    // Apply district filter
+    if (debouncedFilters.district) {
+      filtered = filtered.filter(s => {
+        const district = (s.district_name || '').toLowerCase();
+        return district.includes(debouncedFilters.district.toLowerCase());
+      });
+    }
+    
+    // Apply school type filter
+    if (debouncedFilters.schoolType) {
+      const filterType = debouncedFilters.schoolType.trim();
+      filtered = filtered.filter(s => {
+        const typeH = (s.school_type_h || '').toString();
+        const typeK = (s.school_type_k || '').toString();
+        
+        // For "GEIP" filter, show only schools where school_type_h is exactly "GEIP" (not "GEIP-AF")
+        if (filterType.toLowerCase() === 'geip') {
+          const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
+          if (exactGEIP) {
+            // Make sure it's not GEIP-AF
+            const isAF = typeH.toLowerCase().includes('geip-af') || 
+                        typeK.toLowerCase().includes('geip-af') ||
+                        typeH.toLowerCase().includes('geip af') || 
+                        typeK.toLowerCase().includes('geip af');
+            return !isAF;
+          }
+          return false;
+        }
+        
+        // For "GEIP-AF" or "GEIP AF" filter
+        if (filterType.toLowerCase() === 'geip-af' || filterType.toLowerCase() === 'geip af') {
+          const typeHUpper = typeH.toUpperCase();
+          const typeKUpper = typeK.toUpperCase();
+          return typeHUpper.includes('GEIP-AF') || typeKUpper.includes('GEIP-AF') ||
+                 typeHUpper.includes('GEIP AF') || typeKUpper.includes('GEIP AF');
+        }
+        
+        // For other filters, use exact match first, then fall back to includes
+        const exactMatch = typeH.toLowerCase() === filterType.toLowerCase() || 
+                         typeK.toLowerCase() === filterType.toLowerCase();
+        if (exactMatch) return true;
+        
+        return typeH.toLowerCase().includes(filterType.toLowerCase()) || 
+               typeK.toLowerCase().includes(filterType.toLowerCase());
+      });
+    }
+    
+    // Apply target filter
+    if (debouncedFilters.target) {
+      const isTarget = debouncedFilters.target === 'true' || debouncedFilters.target === '1';
+      filtered = filtered.filter(s => {
+        const schoolIsTarget = isTargetSchool(s);
+        return isTarget ? schoolIsTarget : !schoolIsTarget;
+      });
+    }
+    
+    return filtered;
+  }, [allSchools, schools, debouncedFilters, debouncedSearchQuery, isTargetSchool]);
+
   const paginatedSchools = useMemo(
-    () => schools.slice((page - 1) * perPage, page * perPage),
-    [schools, page, perPage]
+    () => filteredSchools.slice((page - 1) * perPage, page * perPage),
+    [filteredSchools, page, perPage]
   );
 
+  // Always use filtered count for pagination (client-side filtering)
+  const effectiveTotal = useMemo(() => {
+    return filteredSchools.length;
+  }, [filteredSchools.length]);
+
   const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(total / perPage)),
-    [total, perPage]
+    () => Math.max(1, Math.ceil(effectiveTotal / perPage)),
+    [effectiveTotal, perPage]
   );
 
   const start = useMemo(
-    () => (total === 0 ? 0 : (page - 1) * perPage + 1),
-    [total, page, perPage]
+    () => (effectiveTotal === 0 ? 0 : (page - 1) * perPage + 1),
+    [effectiveTotal, page, perPage]
   );
 
   const end = useMemo(
-    () => Math.min(page * perPage, total),
-    [page, perPage, total]
+    () => Math.min(page * perPage, effectiveTotal),
+    [page, perPage, effectiveTotal]
   );
 
-  // Get unique provinces with counts for filters
+  // Get unique provinces with counts for filters (use allSchools if cached)
   const provinceList = useMemo(() => {
+    const sourceData = allSchools.length > 0 && allSchools.length < 5000 ? allSchools : schools;
     const provinceCounts = new Map<string, number>();
-    schools.forEach(school => {
+    sourceData.forEach(school => {
       if (school.province_name) {
         const count = provinceCounts.get(school.province_name) || 0;
         provinceCounts.set(school.province_name, count + 1);
@@ -200,15 +503,56 @@ export default function SchoolsPage() {
     return Array.from(provinceCounts.entries())
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [schools]);
+  }, [allSchools, schools]);
 
   const uniqueSchoolTypes = useMemo(() => {
+    const sourceData = allSchools.length > 0 && allSchools.length < 5000 ? allSchools : schools;
+    
+    // Helper function to determine if a school is target (matches backend logic)
+    const isTargetSchool = (school: School): boolean => {
+      const typeH = (school.school_type_h || '').toString();
+      const typeK = (school.school_type_k || '').toString();
+      
+      // Check if school_type contains "សាលាគោលដៅ" (target school)
+      if (typeH.includes('សាលាគោលដៅ') || typeK.includes('សាលាគោលដៅ')) {
+        return true;
+      }
+      
+      // Also check for SRS or NET-SRS as they might be target schools
+      if (typeH.includes('SRS') || typeH.includes('NET-SRS')) {
+        // But exclude volunteer schools
+        if (typeH.includes('សាលាស្ម័គ្រចិត្ត') || typeK.includes('សាលាស្ម័គ្រចិត្ត')) {
+          return false;
+        }
+        return true;
+      }
+      
+      // Only use API fields if school_type doesn't exist
+      if (!typeH && !typeK) {
+        if (school.is_target !== undefined) return school.is_target === true;
+        if (school.target !== undefined) return school.target === true;
+      }
+      
+      // Default to not target
+      return false;
+    };
+    
+    // Filter by target status if target filter is applied
+    let filteredData = sourceData;
+    if (targetFilter) {
+      const isTarget = targetFilter === 'true' || targetFilter === '1';
+      filteredData = sourceData.filter(school => {
+        const schoolIsTarget = isTargetSchool(school);
+        return isTarget ? schoolIsTarget : !schoolIsTarget;
+      });
+    }
+    
     const types = new Set<string>();
-    schools.forEach(school => {
+    filteredData.forEach(school => {
       if (school.school_type_h) types.add(school.school_type_h);
     });
     return Array.from(types).sort();
-  }, [schools]);
+  }, [allSchools, schools, targetFilter]);
 
   // ============================================
   // HANDLERS
@@ -263,23 +607,13 @@ export default function SchoolsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className={`text-3xl font-bold tracking-tight ${language === 'km' ? 'font-khmer' : ''}`}>
-            {t.schools.title}
-          </h1>
-          <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
-            {t.schools.subtitle}
-          </p>
-        </div>
-        <div className="text-right">
-          <div className={`text-2xl font-bold text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-            {loading ? '...' : total.toLocaleString()}
-          </div>
-          <p className={`text-sm text-muted-foreground mt-1 ${language === 'km' ? 'font-khmer' : ''}`}>
-            Total Schools
-          </p>
-        </div>
+      <div className="mt-6">
+        <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+          {language === 'km' ? 'តម្រងសាលា' : 'Filter School'}
+        </h1>
+        <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+          {t.schools.subtitle}
+        </p>
       </div>
 
       {/* ============================================ */}
@@ -290,7 +624,6 @@ export default function SchoolsPage() {
   rounded-lg
   border border-gray-200 dark:border-border
   p-6 shadow-sm
-  mt-6 sm:mt-4 lg:mt-3
 ">
         <div
           className=" grid 
@@ -350,7 +683,7 @@ export default function SchoolsPage() {
             </Label>
             <Input
               id="district-filter"
-              placeholder={`${t.common.filter} ${t.schools.district.toLowerCase()}...`}
+              placeholder={`${t.common.filter} ${t.schools.district}...`}
               value={districtFilter}
               onChange={(e) => setDistrictFilter(e.target.value)}
               className="w-full font-khmer"
@@ -403,84 +736,102 @@ export default function SchoolsPage() {
       </div>
 
       {/* ============================================ */}
-      {/* PAGE HEADER */}
+      {/* PAGE HEADER ABOVE TABLE */}
       {/* ============================================ */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className={`text-2xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+          <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
             {t.schools.title}
           </h1>
-          <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
-            {t.schools.manageAndView} ({total} {t.schools.total})
+          <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+            {t.schools.manageAndView} ({effectiveTotal} {t.schools.total})
           </p>
         </div>
       </div>
 
       {/* ============================================ */}
-      {/* LOADING STATE OR DATA TABLE */}
+      {/* TABLE CARD */}
       {/* ============================================ */}
-      {loading ? (
-        <Loading
-          title="Loading schools..."
-          description="Please wait while we fetch the data"
-          showSkeleton={true}
-        />
-      ) : (
-        <>
-          {/* Data Table */}
-          <DataTable<School>
-            columns={columns}
-            data={paginatedSchools}
-          />
+      <Card>
+        <CardContent>
+          {loading ? (
+            <Loading
+              title={t.common.loadingData}
+              description={t.common.pleaseWait}
+              showSkeleton={true}
+              language={language}
+            />
+          ) : paginatedSchools.length > 0 ? (
+            <>
+              {/* Data Table */}
+              <DataTable<School>
+                columns={columns}
+                data={paginatedSchools}
+              />
 
-          {/* ============================================ */}
-          {/* PAGINATION CONTROLS */}
-          {/* ============================================ */}
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {start}–{end} of {total}
-            </div>
+              {/* ============================================ */}
+              {/* PAGINATION CONTROLS */}
+              {/* ============================================ */}
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <div className={`text-sm text-muted-foreground ${language === 'km' ? 'font-khmer' : ''}`}>
+                  {t.common.showing} {start}–{end} {t.common.of} {effectiveTotal}
+                </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                Previous
-              </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className={language === 'km' ? 'font-khmer' : ''}
+                  >
+                    {t.common.prev}
+                  </Button>
 
-              <div className="px-3 text-sm">
-                Page {page} of {totalPages}
+                  <div className={`px-3 text-sm text-muted-foreground ${language === 'km' ? 'font-khmer' : ''}`}>
+                    {t.common.page} {page} {t.common.of} {totalPages}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const nextPage = page + 1;
+                      if (nextPage <= totalPages) {
+                        setPage(nextPage);
+                      }
+                    }}
+                    disabled={page >= totalPages || loading}
+                    className={language === 'km' ? 'font-khmer' : ''}
+                  >
+                    {t.common.next}
+                  </Button>
+
+                  <select
+                    value={perPage}
+                    onChange={(e) => {
+                      setPerPage(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className={`ml-2 rounded border bg-background px-2 py-1 text-sm ${language === 'km' ? 'font-khmer' : ''}`}
+                  >
+                    <option value={5} className={language === 'km' ? 'font-khmer' : ''}>5</option>
+                    <option value={10} className={language === 'km' ? 'font-khmer' : ''}>10</option>
+                    <option value={20} className={language === 'km' ? 'font-khmer' : ''}>20</option>
+                    <option value={50} className={language === 'km' ? 'font-khmer' : ''}>50</option>
+                  </select>
+                </div>
               </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                Next
-              </Button>
-
-              <select
-                value={perPage}
-                onChange={(e) => {
-                  setPerPage(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="ml-2 rounded border bg-background px-2 py-1 text-sm"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
+            </>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <p className={language === 'km' ? 'font-khmer' : ''}>
+                {t.common.noData}
+              </p>
             </div>
-          </div>
-        </>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

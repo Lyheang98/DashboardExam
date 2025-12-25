@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { schoolsService } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
                   request.cookies.get('token')?.value || '';
 
     if (!token) {
+      logger.warn('Schools search failed: No authentication token', 'API/SCHOOLS/SEARCH');
       return NextResponse.json(
         { success: false, error: 'Authentication required' },
         { status: 401 }
@@ -27,17 +29,19 @@ export async function GET(request: NextRequest) {
       offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined,
     };
 
+    logger.info(`Schools search request: ${JSON.stringify(params)}`, 'API/SCHOOLS/SEARCH');
+
     const result = await schoolsService.search(token, params);
 
     if (!result.success) {
-      console.error('Schools search failed:', result.error);
+      logger.error(`Schools search failed: ${result.error}`, 'API/SCHOOLS/SEARCH');
       return NextResponse.json(
-        { success: false, error: result.error },
+        { success: false, error: result.error || 'Failed to search schools' },
         { status: 500 }
       );
     }
 
-    console.log(`Schools search success: ${result.data?.length || 0} schools, count: ${result.count}`);
+    logger.info(`Schools search success: ${result.data?.length || 0} schools, count: ${result.count}`, 'API/SCHOOLS/SEARCH');
 
     return NextResponse.json({
       success: true,
@@ -47,6 +51,7 @@ export async function GET(request: NextRequest) {
       previous: result.previous || null,
     });
   } catch (error: any) {
+    logger.error(`Schools search error: ${error?.message || 'Unknown error'}`, 'API/SCHOOLS/SEARCH', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Search failed' },
       { status: 500 }

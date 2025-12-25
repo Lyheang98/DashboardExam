@@ -59,6 +59,9 @@ export const studentsService = {
       
       // Check cache first - use base cache and apply filters/pagination client-side
       const cached = dataCache.get<ProvinceSummary[]>(baseCacheKey);
+      const cachedTotalStudentsKey = baseCacheKey + ':total_students';
+      const cachedTotalStudents = dataCache.get<number>(cachedTotalStudentsKey);
+      
       if (cached) {
         // Apply filters if provided
         let filtered = cached;
@@ -71,12 +74,18 @@ export const studentsService = {
           filtered = filtered.filter(p => p.province_id === params.province_id);
         }
         
+        // Use cached total_students if available (API count), otherwise calculate from provinces
+        const totalStudents = cachedTotalStudents !== null && cachedTotalStudents !== undefined
+          ? cachedTotalStudents
+          : cached.reduce((sum, p) => sum + (p.total_count || 0), 0);
+        
         // Apply pagination
         const paginated = filtered.slice(offset, offset + limit);
         return {
           success: true,
           data: paginated,
           count: filtered.length,
+          total_students: totalStudents, // Use cached API count as source of truth
           next: (offset + limit) < filtered.length ? 'has_more' : null,
           previous: offset > 0 ? 'has_previous' : null,
         };
@@ -157,8 +166,9 @@ export const studentsService = {
       }
 
       // Continue with parallel batch processing
+      // Process ALL records to get accurate counts (no scaling needed)
       let batchesWithoutNewProvinces = 0;
-      while (hasMore && processedRecords < maxRecordsToProcess) {
+      while (hasMore && (totalRecordsInAPI === 0 || processedRecords < totalRecordsInAPI) && processedRecords < maxRecordsToProcess) {
         // Fetch multiple batches in parallel for better performance
         const batchPromises: Promise<any>[] = [];
         const batchOffsets: number[] = [];
@@ -286,20 +296,23 @@ export const studentsService = {
 
       // Convert province map to array - ONLY province-level summary data
       // NO student records are included in the response
+      // Use actual counts (no scaling) since we process all records
       let provinces: ProvinceSummary[] = Array.from(provinceMap.values())
         .map(province => {
-          // If we processed less than total records, scale the counts proportionally
-          // This gives more accurate counts when processing a sample
-          let scaledCount = province.count;
+          // If we processed all records, use actual count
+          // If we processed less, scale proportionally (but we'll use API count for total)
+          let finalCount = province.count;
           if (totalRecordsInAPI > 0 && processedRecords < totalRecordsInAPI && processedRecords > 0) {
+            // Scale province counts proportionally for display
             const scaleFactor = totalRecordsInAPI / processedRecords;
-            scaledCount = Math.round(province.count * scaleFactor);
+            finalCount = Math.round(province.count * scaleFactor);
+            logger.info(`Scaling province ${province.province_name}: ${province.count} -> ${finalCount} (factor: ${scaleFactor.toFixed(2)})`, 'STUDENTS');
           }
           
           return {
             province_id: province.province_id,
             province_name: province.province_name,
-            total_count: scaledCount,
+            total_count: finalCount,
           };
         });
 
@@ -318,7 +331,16 @@ export const studentsService = {
       provinces.sort((a, b) => b.total_count - a.total_count);
 
       // Calculate total students across all provinces (before pagination)
-      const totalStudents = provinces.reduce((sum, province) => sum + (province.total_count || 0), 0);
+      // Use API count as source of truth if we processed less than total records
+      let totalStudents = provinces.reduce((sum, province) => sum + (province.total_count || 0), 0);
+      
+      // If we processed all records, use the calculated sum
+      // If we processed less, use the API count as the accurate total
+      if (totalRecordsInAPI > 0 && processedRecords < totalRecordsInAPI) {
+        // Use API count as source of truth for total
+        totalStudents = totalRecordsInAPI;
+        logger.info(`Using API count as source of truth: ${totalStudents.toLocaleString()} (calculated sum was ${provinces.reduce((sum, p) => sum + (p.total_count || 0), 0).toLocaleString()})`, 'STUDENTS');
+      }
 
       // Apply pagination to province summaries
       const startIndex = offset;
@@ -328,7 +350,20 @@ export const studentsService = {
 
       // Log final results with detailed information
       logger.info(`Final result: Found ${provinces.length} provinces from ${processedRecords} processed records (Target: 25)`, 'STUDENTS');
-      logger.info(`Total students across all provinces: ${totalStudents.toLocaleString()}`, 'STUDENTS');
+      logger.info(`API Total Records: ${totalRecordsInAPI.toLocaleString()}, Processed: ${processedRecords.toLocaleString()}`, 'STUDENTS');
+      logger.info(`Total students (using API count as source of truth): ${totalStudents.toLocaleString()}`, 'STUDENTS');
+      
+      // Verify the count matches API
+      if (totalRecordsInAPI > 0 && totalStudents !== totalRecordsInAPI) {
+        logger.warn(`⚠️ Total students (${totalStudents.toLocaleString()}) does not match API count (${totalRecordsInAPI.toLocaleString()})`, 'STUDENTS');
+      } else if (totalRecordsInAPI > 0) {
+        logger.info(`✅ Total students count matches API count: ${totalStudents.toLocaleString()}`, 'STUDENTS');
+      }
+      
+      // Log breakdown by province for verification
+      provinces.forEach(p => {
+        logger.info(`  - ${p.province_name}: ${p.total_count.toLocaleString()} students`, 'STUDENTS');
+      });
       
       // Log all found provinces for debugging
       const provinceNames = provinces.map(p => p.province_name).sort();
@@ -342,10 +377,13 @@ export const studentsService = {
       }
       
       // Cache the full province list (without pagination) for 30 minutes
+      // Also cache the total_students (API count) separately for accurate totals
       // Only cache base data (no filters) for reuse with different filters/pagination
       if (!params?.province_name && !params?.province_id && offset === 0) {
         dataCache.set(baseCacheKey, provinces, 30 * 60 * 1000); // 30 minutes TTL for better caching
-        logger.info(`Cached ${provinces.length} provinces for future requests`, 'STUDENTS');
+        const cachedTotalStudentsKey = baseCacheKey + ':total_students';
+        dataCache.set(cachedTotalStudentsKey, totalStudents, 30 * 60 * 1000); // Cache API count separately
+        logger.info(`Cached ${provinces.length} provinces and total_students (${totalStudents.toLocaleString()}) for future requests`, 'STUDENTS');
       }
 
       // Return ONLY province summary data - NO student records

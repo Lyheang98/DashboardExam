@@ -18,11 +18,11 @@ export default function SchoolPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className={`text-3xl font-bold tracking-tight ${language === 'km' ? 'font-khmer' : ''}`}>
-          School
+        <h1 className={`text-2xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+          {language === 'km' ? 'សាលា' : 'School'}
         </h1>
         <p className={`text-muted-foreground mt-2 ${language === 'km' ? 'font-khmer' : ''}`}>
-          Manage and view school information
+          {language === 'km' ? 'គ្រប់គ្រង និងមើលព័ត៌មានសាលា' : 'Manage and view school information'}
         </p>
       </div>
 

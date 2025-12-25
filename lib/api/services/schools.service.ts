@@ -204,6 +204,9 @@ export const schoolsService = {
       );
       const cacheTTL = 30 * 60 * 1000; // 30 minutes TTL
 
+      // Check if filters are applied - defined once here and used throughout the function
+      const hasFilters = !!(params.q || params.province || params.district || params.school_type || params.is_target);
+
       // Check cache first (only for base data without filters or with same filters)
       const cached = dataCache.get<School[]>(cacheKey);
       if (cached) {
@@ -370,15 +373,25 @@ export const schoolsService = {
 
       // Filter by target status
       if (params.is_target !== undefined && params.is_target !== '') {
-        const isTarget = params.is_target === 'true' || params.is_target === '1';
-        filteredSchools = filteredSchools.filter((school) => {
-          return isTargetSchool(school) === isTarget;
-        });
+        // Handle string values: 'true', '1' for target schools, 'false', '0' for non-target schools
+        const isTargetValue = params.is_target === 'true' || params.is_target === '1';
+        const isNonTargetValue = params.is_target === 'false' || params.is_target === '0';
+        
+        if (isTargetValue) {
+          // Filter for target schools only
+          filteredSchools = filteredSchools.filter((school) => {
+            return isTargetSchool(school) === true;
+          });
+        } else if (isNonTargetValue) {
+          // Filter for non-target schools only
+          filteredSchools = filteredSchools.filter((school) => {
+            return isTargetSchool(school) === false;
+          });
+        }
       }
 
       // If no filters are applied, return the total count from API (1825)
       // Otherwise, return the filtered count
-      const hasFilters = !!(params.q || params.province || params.district || params.school_type || params.is_target);
       const finalCount = hasFilters ? filteredSchools.length : baseTotalCount;
 
       // Cache the unfiltered or filtered results (depending on whether filters were applied)
