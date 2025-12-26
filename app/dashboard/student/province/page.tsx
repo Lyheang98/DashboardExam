@@ -263,7 +263,7 @@ export default function ProvincePage() {
       key: 'province_id',
       label: 'Province ID',
       render: (value) => (
-        <span className="font-mono text-sm">{value || 'N/A'}</span>
+        <span className="text-sm font-sans">{value || 'N/A'}</span>
       ),
     },
     {
@@ -329,7 +329,7 @@ export default function ProvincePage() {
                 placeholder={language === 'km' ? 'ស្វែងរកតាមលេខសម្គាល់ខេត្ត...' : 'Search by province ID...'}
                 value={provinceIdQuery}
                 onChange={(e) => setProvinceIdQuery(e.target.value)}
-                className="w-full font-khmer"
+                className="w-full"
               />
             </div>
           </div>

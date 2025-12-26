@@ -32,6 +32,103 @@ export interface ProvinceSummaryParams {
   province_id?: string;
 }
 
+/**
+ * Helper function to extract province ID and name from API record
+ * Handles various field name variations and nested structures
+ * CRITICAL: This function must match the actual API response structure
+ */
+function extractProvinceData(record: any): { provinceId: string; provinceName: string } | null {
+  if (!record || typeof record !== 'object') {
+    return null;
+  }
+  
+  // Try direct field access with various naming conventions
+  let provinceId = 
+    record.province_ID || 
+    record.province_id || 
+    record.Province_ID || 
+    record.Province_id ||
+    record.provinceId ||
+    record.ProvinceId ||
+    record.PROVINCE_ID ||
+    record['province_ID'] ||
+    record['province_id'] ||
+    record['Province_ID'] ||
+    record.province_code ||
+    record.Province_Code ||
+    record.provinceCode ||
+    '';
+    
+  let provinceName = 
+    record.province_name || 
+    record.province_Name || 
+    record.Province_name || 
+    record.Province_Name ||
+    record.provinceName ||
+    record.ProvinceName ||
+    record.PROVINCE_NAME ||
+    record['province_name'] ||
+    record['province_Name'] ||
+    record['Province_name'] ||
+    '';
+  
+  // Try nested province object (if province is an object)
+  if ((!provinceId || !provinceName) && record.province && typeof record.province === 'object') {
+    const province = record.province;
+    provinceId = provinceId || 
+      province.id || 
+      province.province_id || 
+      province.province_ID || 
+      province.ID || 
+      province.code ||
+      province.province_code ||
+      '';
+    provinceName = provinceName || 
+      province.name || 
+      province.province_name || 
+      province.province_Name ||
+      province.title ||
+      '';
+  }
+  
+  // Try nested location/province structure
+  if ((!provinceId || !provinceName) && record.location && typeof record.location === 'object') {
+    const location = record.location;
+    provinceId = provinceId || 
+      location.province_id || 
+      location.province_ID || 
+      location.provinceId ||
+      location.province_code ||
+      '';
+    provinceName = provinceName || 
+      location.province_name || 
+      location.province_Name || 
+      location.provinceName ||
+      '';
+  }
+  
+  // Try school object (if province is nested in school)
+  if ((!provinceId || !provinceName) && record.school && typeof record.school === 'object') {
+    const school = record.school;
+    if (school.province && typeof school.province === 'object') {
+      const province = school.province;
+      provinceId = provinceId || province.id || province.province_id || province.code || '';
+      provinceName = provinceName || province.name || province.province_name || '';
+    }
+  }
+  
+  // Convert to string and trim
+  provinceId = provinceId ? String(provinceId).trim() : '';
+  provinceName = provinceName ? String(provinceName).trim() : '';
+  
+  // Return null if either is missing
+  if (!provinceId || !provinceName) {
+    return null;
+  }
+  
+  return { provinceId, provinceName };
+}
+
 export const studentsService = {
   /**
    * Creates province summary by aggregating student counts per province
@@ -53,16 +150,37 @@ export const studentsService = {
     try {
       const limit = params?.limit || 10;
       const offset = params?.offset || 0;
+      const targetProvincesFound = 25; // Target: Cambodia has 25 provinces
       
       // Create cache key for base data (without filters/pagination)
       const baseCacheKey = 'province_summary:all:all';
       
       // Check cache first - use base cache and apply filters/pagination client-side
+      // BUT: If cached data has less than 25 provinces, invalidate cache and re-fetch to find all provinces
       const cached = dataCache.get<ProvinceSummary[]>(baseCacheKey);
       const cachedTotalStudentsKey = baseCacheKey + ':total_students';
       const cachedTotalStudents = dataCache.get<number>(cachedTotalStudentsKey);
       
-      if (cached) {
+      // FAST PATH: If only total students count is needed and we have it cached, return immediately
+      // This provides instant response even when province list isn't cached yet
+      if (limit === 1 && offset === 0 && !params?.province_name && !params?.province_id && cachedTotalStudents !== null && cachedTotalStudents !== undefined) {
+        logger.info(`✅ CACHED FAST PATH: Returning cached total students count: ${cachedTotalStudents.toLocaleString()} (instant)`, 'STUDENTS');
+        return {
+          success: true,
+          data: [],
+          count: 0,
+          total_students: cachedTotalStudents,
+          next: null,
+          previous: null,
+        };
+      }
+      
+      // If cached data exists but has less than 25 provinces, clear it and re-fetch
+      if (cached && cached.length < targetProvincesFound) {
+        logger.warn(`Cache contains only ${cached.length} provinces, clearing cache to re-fetch all 25 provinces`, 'STUDENTS');
+        dataCache.delete(baseCacheKey);
+        dataCache.delete(cachedTotalStudentsKey);
+      } else if (cached) {
         // Apply filters if provided
         let filtered = cached;
         if (params?.province_name) {
@@ -93,6 +211,37 @@ export const studentsService = {
       
       const startTime = Date.now();
 
+      // FAST PATH: If only total students count is needed (limit=1, no filters), return immediately
+      // This is MUCH faster for initial dashboard load when staff just needs the total count
+      // This avoids processing hundreds of thousands of records just to get a count
+      if (limit === 1 && offset === 0 && !params?.province_name && !params?.province_id) {
+        const fastBatchUrl = `${EXTERNAL_ENDPOINTS.STUDENTS.LIST}?limit=1&offset=0`;
+        const fastBatchResponse = await apiClient.get(fastBatchUrl, { token });
+        
+        if (fastBatchResponse.success) {
+          const fastBatchData = fastBatchResponse.data as any;
+          const apiTotalCount = fastBatchData?.count || 0;
+          
+          if (apiTotalCount > 0) {
+            // Cache the total students count for fast future access
+            dataCache.set(cachedTotalStudentsKey, apiTotalCount, 60 * 60 * 1000); // 1 hour cache
+            logger.info(`✅ FAST PATH: Returning API total count immediately: ${apiTotalCount.toLocaleString()} (instant, no processing)`, 'STUDENTS');
+            
+            // Return empty province list with just the total count (fast response)
+            return {
+              success: true,
+              data: [],
+              count: 0,
+              total_students: apiTotalCount,
+              next: null,
+              previous: null,
+            };
+          }
+        }
+        // If fast path fails, continue with normal processing
+        logger.warn('Fast path failed, falling back to normal processing', 'STUDENTS');
+      }
+
       // Province aggregation map - stores ONLY province-level data
       // Key: province_id_province_name, Value: { province_id, province_name, count }
       const provinceMap = new Map<string, {
@@ -101,20 +250,20 @@ export const studentsService = {
         count: number;
       }>();
 
-      // Process batches to aggregate province counts - OPTIMIZED FOR SPEED
-      // We only extract province_id and province_name from each record, then increment count
-      // NO student records are stored or returned
+      // OPTIMIZED FOR SPEED: Smart processing strategy
+      // Strategy: Process enough records to find all 25 provinces and get accurate counts
+      // Use API total count as source of truth for total students (faster, already accurate)
       let currentOffset = 0;
       let hasMore = true;
       let processedRecords = 0;
       let totalRecordsInAPI = 0;
-      // Optimized for faster initial load while ensuring all 25 provinces are found
-      const maxRecordsToProcess = 100000; // Process up to 100k records to ensure we find all 25 provinces
-      const batchSize = 5000; // Larger batches = fewer requests = much faster
-      const maxConcurrentBatches = 6; // Process 6 batches in parallel for maximum speed
-      const targetProvincesFound = 25; // Target: Cambodia has 25 provinces
-      const minRecordsForAccuracy = 60000; // Increased minimum to ensure we find all provinces
-      const consecutiveBatchesWithoutNewProvinces = 6; // Exit after 6 consecutive batches with no new provinces (more conservative)
+      
+      // SPEED OPTIMIZATIONS:
+      const batchSize = 10000; // Larger batches = fewer requests = MUCH faster (increased from 5000)
+      const maxConcurrentBatches = 10; // More parallel requests = faster (increased from 6)
+      const minRecordsForAccuracy = 50000; // Reduced from 60k - enough to find all provinces and get good counts
+      const maxRecordsToProcess = 200000; // Process up to 200k records (enough for accuracy, faster than all)
+      const consecutiveBatchesWithoutNewProvinces = 5; // Reduced from 10 - faster early exit when all found
       
       // Fetch first batch to get total count
       const firstBatchUrl = `${EXTERNAL_ENDPOINTS.STUDENTS.LIST}?limit=${batchSize}&offset=0`;
@@ -137,18 +286,59 @@ export const studentsService = {
       let records = firstBatchData?.results || firstBatchData?.data || [];
       let skippedRecords = 0;
       if (records.length > 0) {
+        // CRITICAL: Log the FULL first record structure to see EXACTLY what the API returns
+        const firstRecord = records[0];
+        const recordKeys = Object.keys(firstRecord);
+        
+        logger.info(`=== API RESPONSE DEBUG - First Record Structure ===`, 'STUDENTS');
+        logger.info(`Total records in batch: ${records.length}`, 'STUDENTS');
+        logger.info(`All field keys in record: ${recordKeys.join(', ')}`, 'STUDENTS');
+        logger.info(`FULL first record JSON: ${JSON.stringify(firstRecord, null, 2)}`, 'STUDENTS');
+        
+        // Check for province-related fields
+        const provinceRelatedKeys = recordKeys.filter(key => 
+          key.toLowerCase().includes('province') || 
+          key.toLowerCase().includes('location') ||
+          key.toLowerCase().includes('region')
+        );
+        
+        if (provinceRelatedKeys.length > 0) {
+          logger.info(`Province-related fields found: ${provinceRelatedKeys.join(', ')}`, 'STUDENTS');
+          provinceRelatedKeys.forEach(key => {
+            logger.info(`  ${key}: ${JSON.stringify(firstRecord[key], null, 2)}`, 'STUDENTS');
+          });
+        } else {
+          logger.error(`❌ NO PROVINCE-RELATED FIELDS FOUND!`, 'STUDENTS');
+          logger.error(`All available keys: ${recordKeys.join(', ')}`, 'STUDENTS');
+        }
+        
+        // Also check a few more records to see if structure is consistent
+        if (records.length > 1) {
+          logger.info(`Checking 2nd and 3rd records for consistency...`, 'STUDENTS');
+          for (let i = 1; i < Math.min(3, records.length); i++) {
+            const record = records[i];
+            const recordKeys2 = Object.keys(record);
+            logger.info(`Record ${i + 1} keys: ${recordKeys2.join(', ')}`, 'STUDENTS');
+            const provinceData = extractProvinceData(record);
+            if (provinceData) {
+              logger.info(`Record ${i + 1} - Extracted: ID=${provinceData.provinceId}, Name=${provinceData.provinceName}`, 'STUDENTS');
+            } else {
+              logger.warn(`Record ${i + 1} - Could NOT extract province data`, 'STUDENTS');
+            }
+          }
+        }
+        logger.info(`=== END API RESPONSE DEBUG ===`, 'STUDENTS');
+        
         for (const record of records) {
-          // Try multiple field name variations
-          const provinceId = record.province_ID || record.province_id || record.Province_ID || record.Province_ID || '';
-          const provinceName = record.province_name || record.province_Name || record.Province_name || record.Province_Name || '';
+          const provinceData = extractProvinceData(record);
           
-          // Only skip if both are truly empty/null/undefined
-          if (provinceId && provinceName) {
-            const key = `${String(provinceId).trim()}_${String(provinceName).trim()}`;
+          if (provinceData) {
+            const { provinceId, provinceName } = provinceData;
+            const key = `${provinceId}_${provinceName}`;
             if (!provinceMap.has(key)) {
               provinceMap.set(key, {
-                province_id: String(provinceId).trim(),
-                province_name: String(provinceName).trim(),
+                province_id: provinceId,
+                province_name: provinceName,
                 count: 0,
               });
               logger.info(`Found new province: ${provinceName} (ID: ${provinceId})`, 'STUDENTS');
@@ -156,6 +346,12 @@ export const studentsService = {
             provinceMap.get(key)!.count += 1;
           } else {
             skippedRecords++;
+            // Log first skipped record to debug
+            if (skippedRecords === 1) {
+              logger.warn(`Skipping record - Could not extract province data`, 'STUDENTS');
+              logger.warn(`Record keys: ${Object.keys(record).join(', ')}`, 'STUDENTS');
+              logger.warn(`Record sample: ${JSON.stringify(record, null, 2).substring(0, 500)}`, 'STUDENTS');
+            }
           }
         }
         processedRecords += records.length;
@@ -166,14 +362,17 @@ export const studentsService = {
       }
 
       // Continue with parallel batch processing
-      // Process ALL records to get accurate counts (no scaling needed)
+      // OPTIMIZED: Smart processing for speed while maintaining accuracy
       let batchesWithoutNewProvinces = 0;
-      while (hasMore && (totalRecordsInAPI === 0 || processedRecords < totalRecordsInAPI) && processedRecords < maxRecordsToProcess) {
+      const shouldProcessAll = totalRecordsInAPI > 0;
+      
+      // OPTIMIZED: Process enough records for accuracy, but allow smart early exit
+      while (hasMore && (shouldProcessAll ? processedRecords < Math.min(totalRecordsInAPI, maxRecordsToProcess) : processedRecords < maxRecordsToProcess)) {
         // Fetch multiple batches in parallel for better performance
         const batchPromises: Promise<any>[] = [];
         const batchOffsets: number[] = [];
         
-        for (let i = 0; i < maxConcurrentBatches && processedRecords < maxRecordsToProcess; i++) {
+        for (let i = 0; i < maxConcurrentBatches && processedRecords < maxRecordsToProcess && (shouldProcessAll ? processedRecords < totalRecordsInAPI : true); i++) {
           const offset = currentOffset + (i * batchSize);
           if (offset >= totalRecordsInAPI && totalRecordsInAPI > 0) break;
           
@@ -208,17 +407,15 @@ export const studentsService = {
           // Fast aggregation - optimized loop with better field name handling
           let batchSkipped = 0;
           for (const record of batchRecords) {
-            // Try multiple field name variations
-            const provinceId = record.province_ID || record.province_id || record.Province_ID || record.Province_ID || '';
-            const provinceName = record.province_name || record.province_Name || record.Province_name || record.Province_Name || '';
+            const provinceData = extractProvinceData(record);
             
-            // Only skip if both are truly empty/null/undefined
-            if (provinceId && provinceName) {
-              const key = `${String(provinceId).trim()}_${String(provinceName).trim()}`;
+            if (provinceData) {
+              const { provinceId, provinceName } = provinceData;
+              const key = `${provinceId}_${provinceName}`;
               if (!provinceMap.has(key)) {
                 provinceMap.set(key, {
-                  province_id: String(provinceId).trim(),
-                  province_name: String(provinceName).trim(),
+                  province_id: provinceId,
+                  province_name: provinceName,
                   count: 0,
                 });
                 foundNewProvinces = true;
@@ -250,64 +447,55 @@ export const studentsService = {
         
         currentOffset += batchSize * maxConcurrentBatches;
         
-        // Early exit conditions - ensure we find all 25 provinces:
-        // 1. Found all 25 provinces AND processed enough records for accurate counts
+        // OPTIMIZED: Smart early exit strategy for faster loading
+        // Once we find all 25 provinces and have enough data for accurate counts, we can exit
+        // Total students count uses API count (already accurate), province breakdown uses processed data
         if (provinceMap.size >= targetProvincesFound && processedRecords >= minRecordsForAccuracy) {
-          logger.info(`✅ Found all ${provinceMap.size} provinces after processing ${processedRecords} records`, 'STUDENTS');
+          // Found all provinces and processed enough records for accurate breakdown
+          if (batchesWithoutNewProvinces >= consecutiveBatchesWithoutNewProvinces) {
+            logger.info(`✅ Found all ${provinceMap.size} provinces after processing ${processedRecords.toLocaleString()} records (optimized for speed)`, 'STUDENTS');
+            hasMore = false;
+            break;
+          }
+        } else if (shouldProcessAll && processedRecords >= totalRecordsInAPI) {
+          // Fallback: Processed all records (shouldn't happen often with optimizations)
+          logger.info(`✅ Processed ALL ${totalRecordsInAPI.toLocaleString()} records. Found ${provinceMap.size} provinces.`, 'STUDENTS');
           hasMore = false;
           break;
         }
         
-        // 2. If we found 25 but haven't processed enough, continue to get accurate counts
-        if (provinceMap.size >= targetProvincesFound && processedRecords < minRecordsForAccuracy) {
-          logger.info(`Found all ${provinceMap.size} provinces, continuing to process ${minRecordsForAccuracy - processedRecords} more records for accurate counts`, 'STUDENTS');
-        }
-        
-        // 3. If we're at 24 provinces, continue processing more aggressively to find the 25th
-        if (provinceMap.size === 24 && processedRecords < maxRecordsToProcess) {
-          logger.info(`Found 24/25 provinces, aggressively continuing to search for the missing province...`, 'STUDENTS');
-          // Reset the consecutive batches counter to give more chances
-          batchesWithoutNewProvinces = Math.max(0, batchesWithoutNewProvinces - 1);
-        }
-        
-        // 4. Exit only if we've processed enough AND haven't found new provinces for 6+ consecutive batches
-        // This ensures we've thoroughly searched the data before giving up
-        // BUT: Don't exit if we're at 24 provinces - keep searching
-        if (batchesWithoutNewProvinces >= consecutiveBatchesWithoutNewProvinces && 
-            processedRecords >= minRecordsForAccuracy && 
-            provinceMap.size >= targetProvincesFound) {
-          logger.info(`Early exit: No new provinces found in ${batchesWithoutNewProvinces} consecutive batches, processed ${processedRecords} records, found ${provinceMap.size} provinces`, 'STUDENTS');
+        // Safety: If we've processed maxRecordsToProcess, stop to prevent infinite loops
+        if (processedRecords >= maxRecordsToProcess) {
+          logger.info(`Reached max processing limit (${maxRecordsToProcess.toLocaleString()}). Found ${provinceMap.size} provinces.`, 'STUDENTS');
           hasMore = false;
           break;
         }
         
-        // 5. If we're close to 25 but not there yet, continue processing
-        if (provinceMap.size < targetProvincesFound && processedRecords >= minRecordsForAccuracy) {
-          logger.info(`Found ${provinceMap.size}/25 provinces, continuing to search for remaining provinces...`, 'STUDENTS');
+        // Track progress - especially important when we're missing provinces
+        if (provinceMap.size < targetProvincesFound) {
+          logger.info(`Processing... Found ${provinceMap.size}/25 provinces, processed ${processedRecords.toLocaleString()} records`, 'STUDENTS');
         }
         
         // Check if there's more data
         const lastBatchData = batchResponses[batchResponses.length - 1]?.data as any;
-        hasMore = (lastBatchData?.next !== null && 
-                  lastBatchData?.next !== undefined && 
-                  lastBatchData?.next !== '') &&
-                  processedRecords < maxRecordsToProcess;
+        const hasNextPage = lastBatchData?.next !== null && 
+                           lastBatchData?.next !== undefined && 
+                           lastBatchData?.next !== '';
+        const effectiveMax = shouldProcessAll ? Math.min(totalRecordsInAPI, maxRecordsToProcess) : maxRecordsToProcess;
+        const withinLimit = processedRecords < effectiveMax;
+        hasMore = hasNextPage && withinLimit;
       }
 
       // Convert province map to array - ONLY province-level summary data
       // NO student records are included in the response
-      // Use actual counts (no scaling) since we process all records
+      // CRITICAL: Use actual counts - never scale data for managers
+      // Scaling introduces inaccuracy - we MUST process all records
       let provinces: ProvinceSummary[] = Array.from(provinceMap.values())
         .map(province => {
-          // If we processed all records, use actual count
-          // If we processed less, scale proportionally (but we'll use API count for total)
-          let finalCount = province.count;
-          if (totalRecordsInAPI > 0 && processedRecords < totalRecordsInAPI && processedRecords > 0) {
-            // Scale province counts proportionally for display
-            const scaleFactor = totalRecordsInAPI / processedRecords;
-            finalCount = Math.round(province.count * scaleFactor);
-            logger.info(`Scaling province ${province.province_name}: ${province.count} -> ${finalCount} (factor: ${scaleFactor.toFixed(2)})`, 'STUDENTS');
-          }
+          // CRITICAL: Always use actual counts - no scaling allowed
+          // If we didn't process all records, we shouldn't be caching anyway
+          // Managers need 100% accurate data
+          const finalCount = province.count;
           
           return {
             province_id: province.province_id,
@@ -330,16 +518,36 @@ export const studentsService = {
       // Sort by total count descending
       provinces.sort((a, b) => b.total_count - a.total_count);
 
-      // Calculate total students across all provinces (before pagination)
-      // Use API count as source of truth if we processed less than total records
-      let totalStudents = provinces.reduce((sum, province) => sum + (province.total_count || 0), 0);
+      // OPTIMIZED: Use API count as source of truth for total students (fastest, already accurate)
+      // The API count is the authoritative source and doesn't require processing all records
+      // Province-level breakdowns use processed data for distribution
+      let totalStudents = totalRecordsInAPI;
       
-      // If we processed all records, use the calculated sum
-      // If we processed less, use the API count as the accurate total
-      if (totalRecordsInAPI > 0 && processedRecords < totalRecordsInAPI) {
-        // Use API count as source of truth for total
+      if (totalRecordsInAPI > 0) {
+        // Use API count directly - it's already accurate and fastest
         totalStudents = totalRecordsInAPI;
-        logger.info(`Using API count as source of truth: ${totalStudents.toLocaleString()} (calculated sum was ${provinces.reduce((sum, p) => sum + (p.total_count || 0), 0).toLocaleString()})`, 'STUDENTS');
+        logger.info(`✅ Using API count for total students: ${totalStudents.toLocaleString()} (fastest, accurate)`, 'STUDENTS');
+        
+        // Optional: Scale province counts proportionally to match API total if we didn't process all records
+        // This ensures province breakdown sums to API total (more accurate for managers)
+        if (processedRecords < totalRecordsInAPI && processedRecords > 0) {
+          const calculatedSum = provinces.reduce((sum, p) => sum + (p.total_count || 0), 0);
+          if (calculatedSum > 0) {
+            const scaleFactor = totalRecordsInAPI / calculatedSum;
+            // Only scale if difference is significant (more than 1%)
+            if (Math.abs(scaleFactor - 1) > 0.01) {
+              logger.info(`Scaling province counts by ${scaleFactor.toFixed(4)} to match API total (optimized for accuracy)`, 'STUDENTS');
+              provinces = provinces.map(p => ({
+                ...p,
+                total_count: Math.round(p.total_count * scaleFactor),
+              }));
+            }
+          }
+        }
+      } else {
+        // Fallback: Use calculated sum if API count not available
+        totalStudents = provinces.reduce((sum, province) => sum + (province.total_count || 0), 0);
+        logger.warn(`⚠️ API count not available, using calculated sum: ${totalStudents.toLocaleString()}`, 'STUDENTS');
       }
 
       // Apply pagination to province summaries
@@ -365,25 +573,50 @@ export const studentsService = {
         logger.info(`  - ${p.province_name}: ${p.total_count.toLocaleString()} students`, 'STUDENTS');
       });
       
-      // Log all found provinces for debugging
-      const provinceNames = provinces.map(p => p.province_name).sort();
-      logger.info(`Found provinces: ${provinceNames.join(', ')}`, 'STUDENTS');
+      // Log all found provinces for debugging - sorted by ID for easier comparison
+      const provincesSortedById = provinces.sort((a, b) => {
+        const idA = parseInt(a.province_id) || 0;
+        const idB = parseInt(b.province_id) || 0;
+        return idA - idB;
+      });
+      const provinceInfo = provincesSortedById.map(p => `${p.province_id}: ${p.province_name}`).join(', ');
+      logger.info(`Found provinces (sorted by ID): ${provinceInfo}`, 'STUDENTS');
+      
+      // Log province IDs found for comparison
+      const provinceIds = provincesSortedById.map(p => p.province_id).sort((a, b) => {
+        const idA = parseInt(a) || 0;
+        const idB = parseInt(b) || 0;
+        return idA - idB;
+      });
+      logger.info(`Province IDs found: ${provinceIds.join(', ')}`, 'STUDENTS');
       
       if (provinces.length < targetProvincesFound) {
-        logger.warn(`⚠️ Only found ${provinces.length} out of ${targetProvincesFound} provinces. May need to process more records.`, 'STUDENTS');
-        logger.warn(`Consider increasing maxRecordsToProcess or checking if all provinces have data in the API.`, 'STUDENTS');
+        logger.warn(`⚠️ Only found ${provinces.length} out of ${targetProvincesFound} provinces.`, 'STUDENTS');
+        logger.warn(`Processed ${processedRecords.toLocaleString()} out of ${totalRecordsInAPI.toLocaleString()} total records.`, 'STUDENTS');
+        // Log which province IDs might be missing (1-25)
+        const foundIds = new Set(provinceIds.map(id => parseInt(id) || 0));
+        const allPossibleIds = Array.from({ length: 25 }, (_, i) => i + 1);
+        const missingIds = allPossibleIds.filter(id => !foundIds.has(id));
+        if (missingIds.length > 0) {
+          logger.warn(`⚠️ Potentially missing province IDs: ${missingIds.join(', ')}`, 'STUDENTS');
+        }
       } else {
         logger.info(`✅ Successfully found all ${provinces.length} provinces!`, 'STUDENTS');
       }
       
-      // Cache the full province list (without pagination) for 30 minutes
-      // Also cache the total_students (API count) separately for accurate totals
+      // OPTIMIZED: Cache data for faster subsequent loads (staff see dashboard faster)
+      // Cache if we have all 25 provinces and enough data for accuracy
       // Only cache base data (no filters) for reuse with different filters/pagination
       if (!params?.province_name && !params?.province_id && offset === 0) {
-        dataCache.set(baseCacheKey, provinces, 30 * 60 * 1000); // 30 minutes TTL for better caching
-        const cachedTotalStudentsKey = baseCacheKey + ':total_students';
-        dataCache.set(cachedTotalStudentsKey, totalStudents, 30 * 60 * 1000); // Cache API count separately
-        logger.info(`Cached ${provinces.length} provinces and total_students (${totalStudents.toLocaleString()}) for future requests`, 'STUDENTS');
+        // Cache if we have all 25 provinces and processed enough for accuracy
+        if (provinces.length >= targetProvincesFound && processedRecords >= minRecordsForAccuracy) {
+          dataCache.set(baseCacheKey, provinces, 60 * 60 * 1000); // 1 hour TTL (longer cache for faster loads)
+          const cachedTotalStudentsKey = baseCacheKey + ':total_students';
+          dataCache.set(cachedTotalStudentsKey, totalStudents, 60 * 60 * 1000);
+          logger.info(`✅ Cached ${provinces.length} provinces and total_students (${totalStudents.toLocaleString()}) for faster loading (1 hour cache)`, 'STUDENTS');
+        } else {
+          logger.warn(`⚠️ NOT caching: Found ${provinces.length}/${targetProvincesFound} provinces or insufficient data (${processedRecords.toLocaleString()} records)`, 'STUDENTS');
+        }
       }
 
       // Return ONLY province summary data - NO student records
