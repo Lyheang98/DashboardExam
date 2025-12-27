@@ -255,6 +255,7 @@ export async function apiRequest<T = any>(
     ...(bodyString && { body: bodyString }),
     timeout: options.timeout,
     retries: options.retries,
+    signal: options.signal, // Pass signal for request cancellation
   };
 
   try {

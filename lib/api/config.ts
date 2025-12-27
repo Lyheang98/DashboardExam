@@ -65,9 +65,20 @@ export const EXTERNAL_ENDPOINTS = {
     DETAIL: (id: string | number) => `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/${id}/`,
   },
   STUDENTS: {
-    BASE: getEnv('EXTERNAL_API_STUDENTS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/students/`),
-    LIST: getEnv('EXTERNAL_API_STUDENTS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/students/`),
+    // REMOVED: BASE and LIST are unsafe - never expose flat /students/ endpoint
+    // Only hierarchical endpoints are allowed for safety
     DETAIL: (id: string | number) => `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${id}/`,
+    // Fast ID search - highest priority, ignores other filters
+    BY_EXAM_CODE: (examCode: string) => `${EXTERNAL_API_BASE}/api/Base/data/v1/student/by-exam-code/${encodeURIComponent(examCode)}/`,
+    // Hierarchical endpoint builders - enforce safe usage by design
+    BY_DISTRICT: (provinceId: string, districtName: string) => 
+      `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${encodeURIComponent(provinceId)}/districts/${encodeURIComponent(districtName)}/`,
+    BY_SCHOOL: (provinceId: string, districtName: string, schoolName: string) => 
+      `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${encodeURIComponent(provinceId)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(schoolName)}/`,
+    BY_GRADE: (provinceId: string, districtName: string, schoolName: string, grade: string) => 
+      `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${encodeURIComponent(provinceId)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(schoolName)}/grades/${encodeURIComponent(grade)}/`,
+    BY_ROOM: (provinceId: string, districtName: string, schoolName: string, grade: string, room: string) => 
+      `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${encodeURIComponent(provinceId)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(schoolName)}/grades/${encodeURIComponent(grade)}/rooms/${encodeURIComponent(room)}/`,
   },
 } as const;
 

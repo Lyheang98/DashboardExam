@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { apiClient, EXTERNAL_ENDPOINTS } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
+import { API_CONFIG } from '@/lib/api/config';
 import { logger } from '@/lib/logger';
 import { studentIndexService } from '@/lib/api/services/studentIndex.service';
 
 /**
  * Base Student Data API
- * Fetches base student data from EXTERNAL_ENDPOINTS.STUDENTS.LIST
+ * DEPRECATED: This route uses the unsafe flat /students/ endpoint
+ * Should be refactored to use hierarchical endpoints
  * Initializes the student index service
  * Should be called once to build the index
  */
@@ -41,7 +43,8 @@ export async function GET(request: NextRequest) {
 
     try {
       while (hasMore && totalFetched < maxRecords && batchCount < maxBatches) {
-        const batchUrl = `${EXTERNAL_ENDPOINTS.STUDENTS.LIST}?limit=${Math.min(limit, 10000)}&offset=${currentOffset}`;
+        // WARNING: Using unsafe flat endpoint - should be refactored to use hierarchical endpoints
+        const batchUrl = `${API_CONFIG.EXTERNAL_API_BASE}/api/Base/data/v1/students/?limit=${Math.min(limit, 10000)}&offset=${currentOffset}`;
         const response = await apiClient.get(batchUrl, { token });
 
         if (!response.success) {

@@ -20,8 +20,10 @@ export type { LoginCredentials, LoginResponse, RegisterData } from './services/a
 export type { User, UserSearchParams, UsersListResponse } from './services/users.service';
 export type { School, SchoolSearchParams, SchoolServiceResponse, SchoolData, SchoolServiceParams } from './services/school.service';
 // SchoolsListResponse is now SchoolServiceResponse from school.service
+import type { SchoolServiceResponse } from './services/school.service';
 export type SchoolsListResponse = SchoolServiceResponse;
-export type { ProvinceSummary, ProvinceSummaryResponse, ProvinceSummaryParams } from './services/students.service';
+// Export Student types from students.service
+export type { Student, StudentsListResponse, StudentsListParams } from './services/students.service';
 export type { DistrictSummary, SchoolSummary, StudentIndexListResponse } from './services/studentIndex.service';
 export type { StudentDetail, StudentDetailResponse, StudentDetailParams } from './services/studentDetail.service';
 export type { ProvinceData, ProvinceServiceResponse, ProvinceServiceParams } from './services/province.service';

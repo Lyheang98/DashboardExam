@@ -28,6 +28,7 @@ import { cacheHandlers } from '@/lib/cache/cacheHandlers';
 import { DashboardUser, DashboardProduct, Granularity } from './types';
 import { fetchDashboardData } from './utils';
 import { ChartSection } from './components/ChartSection';
+import { getProvinces } from '@/lib/constants/provinces';
 
 // Constants
 const AVAILABLE_YEARS = ['2025', '2026', '2027', '2028', '2029', '2030'] as const;
@@ -198,7 +199,11 @@ export default function DashboardPage() {
     };
   }, [mounted, refreshKey]);
 
-  // Fetch total students count from 25 provinces
+  // Fetch total students count from dedicated dashboard API
+  // COMPLETELY SEPARATE from Students page logic - no shared state, filters, or pagination
+  // Uses ONLY response.count, NEVER results.length
+  // Fetches with limit=1 for performance
+  // StatCard is independent - does NOT depend on Students page filters or pagination
   useEffect(() => {
     if (!mounted) return;
     
@@ -209,22 +214,29 @@ export default function DashboardPage() {
       try {
         const token = getToken();
         if (!token) {
-          logger.warn('No token available for students fetch', 'DASHBOARD');
+          logger.warn('No token available for students count fetch', 'DASHBOARD');
           return;
         }
 
         // Check cache first
-        const cacheKey = 'province_summary:total_students';
+        const cacheKey = 'dashboard:total_students_count';
         const cached = dataCache.get<number>(cacheKey);
         if (cached !== null && cached !== undefined) {
           if (isMounted && !controller.signal.aborted) {
             setTotalStudents(cached);
+            logger.info(`Using cached total students count: ${cached.toLocaleString()}`, 'DASHBOARD');
           }
           return;
         }
 
-        // Fetch with minimal params to get total_students
-        const response = await fetch('/api/provinces?limit=1&offset=0', {
+        // Call dedicated dashboard API endpoint (completely separate from Students page)
+        // This endpoint:
+        // - Uses flat /students/ endpoint with limit=1 to get GLOBAL total count
+        // - Returns ONLY response.count (never results.length)
+        // - Does NOT depend on Students page filters or pagination
+        // - Is independent of any user selections or filters
+        // - Gets system-wide total (542,025+ students across all provinces)
+        const response = await fetch(`/api/dashboard/students/count`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -239,19 +251,23 @@ export default function DashboardPage() {
         const data = await response.json();
 
         if (isMounted && !controller.signal.aborted) {
-          if (data.success && data.total_students !== undefined) {
-            const total = data.total_students;
+          if (data.success && data.count !== undefined) {
+            // STRICT: Use ONLY response.count from dashboard API, NEVER results.length
+            // The dashboard API returns only the count field, not the data array
+            // This count is independent of Students page filters, pagination, or state
+            const total = data.count || 0;
             setTotalStudents(total);
-            // Cache for 30 minutes (same as province summary)
+            // Cache for 30 minutes
             dataCache.set(cacheKey, total, 30 * 60 * 1000);
-            logger.info(`Total students fetched: ${total}`, 'DASHBOARD');
+            logger.info(`Total students count: ${total.toLocaleString()} (from dashboard API response.count with limit=1, NOT results.length, independent of Students page)`, 'DASHBOARD');
           } else {
+            logger.warn('Dashboard API did not return count field', 'DASHBOARD');
             setTotalStudents(0);
           }
         }
       } catch (error: any) {
         if (isMounted && error?.name !== 'AbortError') {
-          logger.error('Failed to fetch total students', 'DASHBOARD', error);
+          logger.error('Failed to fetch total students count from dashboard API', 'DASHBOARD', error);
           setTotalStudents(0);
         }
       }
@@ -263,13 +279,13 @@ export default function DashboardPage() {
       isMounted = false;
       controller.abort();
     };
-  }, [mounted, refreshKey]);
+  }, [mounted, refreshKey]); // Only depends on mount state and refresh key, NOT on Students page state
 
   // Handler for refresh button
   const handleRefresh = () => {
     // Clear cache first
     dataCache.delete(CACHE_KEYS.SCHOOLS_COUNT);
-    dataCache.delete('province_summary:total_students');
+    dataCache.delete('dashboard:total_students_count');
     // Trigger re-fetch
     setRefreshKey(prev => prev + 1);
   };

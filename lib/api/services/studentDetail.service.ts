@@ -1,23 +1,20 @@
 /**
  * Student Detail Service
  * 
- * Purpose: Handle HEAVY student data
- * Used ONLY by Students page
+ * Purpose: Handle SINGLE student detail queries
+ * Used ONLY for /students/{id} (single student lookup)
  * 
- * Responsibilities:
- * - Call required-parameter APIs such as:
- *   /students/{province_id}/
- *   /students/{province_id}/districts/{district}/schools/{school}/...
- * - Support pagination and request cancellation
- * - Clear data on filter change
+ * STRICT RULES:
+ * - NEVER used for list queries (use students.service.ts instead)
+ * - NEVER uses query params for filtering (only for single student ID)
+ * - ONLY for fetching individual student records by ID
  * 
- * Rules:
- * - NEVER auto-fetch
- * - Fetch ONLY on "Filter Data" click
- * - Heavy data MUST be isolated here
+ * For student LIST queries, use students.service.ts which uses hierarchical endpoints.
  */
 
 import { logger } from '../../logger';
+import { EXTERNAL_ENDPOINTS } from '../config';
+import { apiClient } from '../client';
 
 export interface StudentDetail {
   id: string | number;
@@ -34,57 +31,18 @@ export interface StudentDetailResponse {
 }
 
 export interface StudentDetailParams {
-  province_id?: string; // Optional - maps to backend: province_ID
-  district_name?: string; // Optional - maps to backend: district_name
-  school_name?: string; // Optional - maps to backend: geip_school_ID (for API)
-  geip_school_ID?: string; // Optional - exact API field name
-  grade?: string; // Optional - filter by grade
-  room?: string; // Optional - filter by class/room
-  student_type?: string; // Optional - filter by student type
-  limit?: number;
-  offset?: number;
-}
-
-/**
- * Build API URL for student detail endpoint
- * Uses internal API route /api/students instead of calling external API directly
- * Handles various endpoint patterns based on provided parameters
- */
-function buildStudentDetailUrl(params: StudentDetailParams): string {
-  const { province_id, district_name, school_name, geip_school_ID, grade, room, student_type, limit = 25, offset = 0 } = params;
-  
-  // Use internal API route
-  const baseUrl = '/api/students';
-  
-  // Build URL with query parameters using EXACT API field names
-  const queryParams = new URLSearchParams();
-  // Always include pagination
-  queryParams.append('limit', limit.toString());
-  queryParams.append('offset', offset.toString());
-  
-  // Use exact API field names
-  if (province_id) queryParams.append('province_ID', province_id); // API uses capital ID
-  if (district_name) queryParams.append('district_name', district_name);
-  // Use geip_school_ID if provided, otherwise fall back to school_name
-  if (geip_school_ID) {
-    queryParams.append('geip_school_ID', geip_school_ID);
-  } else if (school_name) {
-    queryParams.append('geip_school_ID', school_name); // Map school_name to geip_school_ID for API
-  }
-  if (grade) queryParams.append('grade', grade);
-  if (room) queryParams.append('room', room);
-  if (student_type) queryParams.append('student_type', student_type);
-  
-  return `${baseUrl}?${queryParams.toString()}`;
+  id: string | number; // REQUIRED - student ID for single student lookup
 }
 
 export const studentDetailService = {
   /**
-   * Fetch student details with required parameters
-   * This is the ONLY method that calls student detail APIs
+   * Fetch a SINGLE student detail by ID
+   * 
+   * STRICT: This is ONLY for /students/{id} (single student)
+   * For student lists, use students.service.ts instead
    * 
    * @param token - Authentication token
-   * @param params - Required parameters (province_id is mandatory)
+   * @param params - Student ID parameter
    * @param signal - AbortSignal for request cancellation
    */
   async getStudentDetails(
@@ -93,68 +51,55 @@ export const studentDetailService = {
     signal?: AbortSignal
   ): Promise<StudentDetailResponse> {
     try {
-      // All parameters are optional - API can filter by any combination
-      // However, filtering by province and district is recommended for better performance
-      
-      const url = buildStudentDetailUrl(params);
-      
-      logger.info(`Fetching student details: ${url}`, 'STUDENT_DETAIL');
-      
-      // Call internal API route with authentication header
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        signal,
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        logger.error(`Failed to fetch student details: ${data.error || response.statusText}`, 'STUDENT_DETAIL');
+      // Validate required ID
+      if (!params.id) {
+        logger.error('[STUDENT_DETAIL] Student ID is required', 'STUDENT_DETAIL');
         return {
           success: false,
-          error: data.error || response.statusText || 'Failed to fetch student details',
+          error: 'Student ID is required',
         };
       }
+
+      // Build hierarchical endpoint for single student: /students/{id}/
+      const endpoint = EXTERNAL_ENDPOINTS.STUDENTS.DETAIL(params.id);
       
-      if (!data.success) {
-        logger.error(`API returned error: ${data.error}`, 'STUDENT_DETAIL');
+      logger.info(`[STUDENT_DETAIL] Fetching student detail: ${endpoint}`, 'STUDENT_DETAIL');
+
+      // Call external API directly using hierarchical endpoint
+      const response = await apiClient.get(endpoint, { token, signal });
+
+      if (!response.success) {
+        logger.error(`[STUDENT_DETAIL] API returned error: ${response.error}`, 'STUDENT_DETAIL');
         return {
           success: false,
-          error: data.error || 'Failed to fetch student details',
+          error: response.error || 'Failed to fetch student details',
         };
       }
-      
-      // CRITICAL: Always use response.results and response.count (never results.length)
-      // Backend returns: { count, next, previous, results } or { count, data }
-      const students = data?.results || data?.data || [];
-      const count = data?.count ?? data?.total_count ?? 0; // Use API count, never results.length
-      const next = data?.next || null;
-      const previous = data?.previous || null;
-      
-      logger.info(`[STUDENT_DETAIL] Fetched ${students.length} students from results, API count: ${count}`, 'STUDENT_DETAIL');
-      logger.info(`[STUDENT_DETAIL] Pagination: next=${next ? 'yes' : 'no'}, previous=${previous ? 'yes' : 'no'}`, 'STUDENT_DETAIL');
-      
+
+      // Parse response data
+      const data = response.data as any;
+      const student = Array.isArray(data) ? data[0] : data;
+      const students = student ? [student] : [];
+
+      logger.info(`[STUDENT_DETAIL] Fetched student detail for ID: ${params.id}`, 'STUDENT_DETAIL');
+
       return {
         success: true,
         data: students,
-        count,
-        next,
-        previous,
+        count: students.length,
+        next: null,
+        previous: null,
       };
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        logger.info('Student detail request cancelled', 'STUDENT_DETAIL');
+        logger.info('[STUDENT_DETAIL] Request cancelled', 'STUDENT_DETAIL');
         return {
           success: false,
           error: 'Request cancelled',
         };
       }
-      
-      logger.error('Get student details error', 'STUDENT_DETAIL', error);
+
+      logger.error('[STUDENT_DETAIL] Get student details error', 'STUDENT_DETAIL', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch student details',
@@ -162,4 +107,3 @@ export const studentDetailService = {
     }
   },
 };
-

@@ -15,6 +15,7 @@ export interface SchoolData {
   district_name: string;
   school_name: string;
   total_count: number;
+  geip_school_ID?: string; // Added for Student page dropdown
 }
 
 export interface School {
@@ -89,6 +90,7 @@ function normalizeSchoolData(data: any[]): SchoolData[] {
     const provinceId = (item.province_id || item.id || item.province_ID || '').toString().trim();
     const districtName = (item.district_name || item.name || item.district_Name || '').toString().trim();
     const schoolName = (item.school_name || item.name || item.school_Name || '').toString().trim();
+    const geipSchoolId = (item.geip_school_ID || item.geip_school_id || item.id || '').toString().trim();
     const totalCount = typeof item.total_count === 'number' ? item.total_count : 
                       (typeof item.student_count === 'number' ? item.student_count :
                       (typeof item.count === 'number' ? item.count : 0));
@@ -104,12 +106,17 @@ function normalizeSchoolData(data: any[]): SchoolData[] {
       const existing = schoolMap.get(key)!;
       // Merge counts if duplicate
       existing.total_count += totalCount;
+      // Preserve geip_school_ID if missing in existing but present in new item
+      if (!existing.geip_school_ID && geipSchoolId) {
+        existing.geip_school_ID = geipSchoolId;
+      }
     } else {
       schoolMap.set(key, {
         province_id: provinceId,
         district_name: districtName,
         school_name: schoolName,
         total_count: totalCount,
+        ...(geipSchoolId && { geip_school_ID: geipSchoolId }),
       });
     }
   }

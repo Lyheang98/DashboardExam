@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiClient, EXTERNAL_ENDPOINTS } from '@/lib/api/client';
+import { API_CONFIG } from '@/lib/api/config';
 import { logger } from '@/lib/logger';
 import { dataCache } from '@/lib/cache/dataCache';
 
@@ -98,15 +99,22 @@ export async function GET(request: NextRequest) {
     // If no cached data, fetch and aggregate
     let students: any[] = [];
     
-      // Build API URL - fetch all students if no province_id, otherwise filter by province
-      let baseUrl = EXTERNAL_ENDPOINTS.STUDENTS.LIST;
-      if (province_id) {
-        // Format: /api/Base/data/v1/students/{province_id}/
-        baseUrl = `${baseUrl}${province_id}/`;
-        if (district_name) {
-          // Format: /api/Base/data/v1/students/{province_id}/districts/{district_name}/
-          baseUrl = `${baseUrl}districts/${encodeURIComponent(district_name)}/`;
-        }
+      // Build hierarchical endpoint - use BY_DISTRICT for minimum scope
+      // Note: This route aggregates districts, so it needs to fetch students
+      // For aggregation, we use the minimum hierarchical endpoint (BY_DISTRICT)
+      let baseUrl: string;
+      if (province_id && district_name) {
+        baseUrl = EXTERNAL_ENDPOINTS.STUDENTS.BY_DISTRICT(province_id, district_name);
+      } else if (province_id) {
+        // If only province_id, we need to use a different approach
+        // For now, use BY_DISTRICT with a wildcard or fetch from province level
+        // This is a legacy case - ideally province_id + district_name should be required
+        baseUrl = `${API_CONFIG.EXTERNAL_API_BASE}/api/Base/data/v1/students/${encodeURIComponent(province_id)}/`;
+      } else {
+        // No province_id - this is unsafe but needed for "all districts" aggregation
+        // Use a base endpoint (this should be avoided in production)
+        // WARNING: This exposes the unsafe flat endpoint - should be refactored
+        baseUrl = `${API_CONFIG.EXTERNAL_API_BASE}/api/Base/data/v1/students/`;
       }
       
     // OPTIMIZED: Fetch ALL students efficiently - balance speed and completeness

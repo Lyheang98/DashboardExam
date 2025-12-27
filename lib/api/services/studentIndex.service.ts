@@ -16,7 +16,22 @@
 
 import { logger } from '../../logger';
 import { dataCache } from '../../cache/dataCache';
-import { studentDetailService, StudentDetailParams, StudentDetailResponse } from './studentDetail.service';
+
+/**
+ * DEPRECATED: Old interface for student list params
+ * This service is deprecated - use students.service.ts instead
+ */
+interface StudentIndexListParams {
+  province_id?: string;
+  district_name?: string;
+  school_name?: string;
+  geip_school_ID?: string;
+  grade?: string;
+  room?: string;
+  student_type?: string;
+  limit?: number;
+  offset?: number;
+}
 
 export interface DistrictSummary {
   province_id: string;
@@ -280,8 +295,9 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes (shorter TTL for student data)
 /**
  * Generate cache key from parameters
  * Only caches first page (offset=0) to avoid cache bloat
+ * DEPRECATED: This service is deprecated
  */
-function getListCacheKey(params: StudentDetailParams): string {
+function getListCacheKey(params: StudentIndexListParams): string {
   // Only cache first page results
   if (params.offset && params.offset > 0) {
     return ''; // Don't cache paginated results
@@ -294,7 +310,8 @@ function getListCacheKey(params: StudentDetailParams): string {
 export const studentIndexService = {
   /**
    * Get student list with pagination and filters
-   * This is the ONLY method used for fetching student lists on the Student page
+   * 
+   * @deprecated This method is deprecated. Use students.service.ts with hierarchical endpoints instead.
    * 
    * @param token - Authentication token
    * @param params - Filter parameters (province_id, district_name, school_name, grade, room, student_type, limit, offset)
@@ -302,10 +319,41 @@ export const studentIndexService = {
    */
   async getList(
     token: string,
-    params: StudentDetailParams,
+    params: StudentIndexListParams,
     signal?: AbortSignal
   ): Promise<StudentIndexListResponse> {
     try {
+      // STRICT VALIDATION: Require province_id + district_name
+      if (!params.province_id || !params.province_id.trim()) {
+        logger.error('[STUDENT_INDEX] Invalid parameters: province_id is required', 'STUDENT_INDEX');
+        return {
+          success: false,
+          error: 'province_id is required',
+        };
+      }
+      if (!params.district_name || !params.district_name.trim()) {
+        logger.error('[STUDENT_INDEX] Invalid parameters: district_name is required', 'STUDENT_INDEX');
+        return {
+          success: false,
+          error: 'district_name is required',
+        };
+      }
+      // Require pagination
+      if (params.limit === undefined || params.limit < 1) {
+        logger.error('[STUDENT_INDEX] Invalid parameters: limit is required and must be >= 1', 'STUDENT_INDEX');
+        return {
+          success: false,
+          error: 'limit is required and must be >= 1',
+        };
+      }
+      if (params.offset === undefined || params.offset < 0) {
+        logger.error('[STUDENT_INDEX] Invalid parameters: offset is required and must be >= 0', 'STUDENT_INDEX');
+        return {
+          success: false,
+          error: 'offset is required and must be >= 0',
+        };
+      }
+
       // Check cache first (only for first page, not paginated requests)
       const cacheKey = getListCacheKey(params);
       if (cacheKey) {
@@ -316,30 +364,16 @@ export const studentIndexService = {
         }
       }
 
-      // Call the detail service to fetch students
-      const result = await studentDetailService.getStudentDetails(token, params, signal);
-
-      if (!result.success) {
-        return {
-          success: false,
-          error: result.error || 'Failed to fetch students',
-        };
-      }
-
-      // Use result.data (which comes from response.results) and result.count
-      const responseData: StudentIndexListResponse = {
-        success: true,
-        data: result.data || [], // This is already response.results from studentDetailService
-        count: result.count || 0, // This is already response.count from studentDetailService
+      // DEPRECATED: This service should not be used for list queries
+      // Use students.service.ts instead which uses hierarchical endpoints
+      // Keeping this for backward compatibility but it will fail
+      logger.warn('[STUDENT_INDEX] getList is deprecated. Use students.service.ts with hierarchical endpoints instead.', 'STUDENT_INDEX');
+      return {
+        success: false,
+        error: 'studentIndexService.getList is deprecated. Use students.service.ts with hierarchical endpoints instead.',
+        data: [],
+        count: 0,
       };
-
-      // Cache only first page results (offset=0 or no offset)
-      if (cacheKey) {
-        dataCache.set(cacheKey, responseData, CACHE_TTL);
-        logger.info(`[STUDENT_INDEX] Cached ${responseData.data?.length || 0} students for key: ${cacheKey}`, 'STUDENT_INDEX');
-      }
-
-      return responseData;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         logger.info('[STUDENT_INDEX] Request cancelled', 'STUDENT_INDEX');

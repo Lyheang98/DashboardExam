@@ -4,9 +4,12 @@ import { logger } from '@/lib/logger';
 
 /**
  * Students API Route
- * Uses Student API with required parameters (province_id, district_name)
- * Returns students with pagination support
- * CRITICAL: Uses STUDENTS API only for student data
+ * 
+ * DEPRECATED: This route accepts query params which is unsafe.
+ * Frontend should use students.service.ts which calls hierarchical endpoints directly.
+ * 
+ * This route is kept for backward compatibility but will reject query param requests.
+ * All student list queries must use hierarchical endpoints via students.service.ts.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -21,10 +24,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // REJECT query param requests - hierarchical endpoints must be used
     const searchParams = request.nextUrl.searchParams;
-    // Support both province_id and province_ID (API uses province_ID with capital ID)
-    const province_id = searchParams.get('province_ID') || searchParams.get('province_id') || undefined;
-    const district_name = searchParams.get('district_name') || undefined;
+    const hasQueryParams = searchParams.has('province_id') || 
+                          searchParams.has('province_ID') || 
+                          searchParams.has('district_name');
+    
+    if (hasQueryParams) {
+      logger.error('[STUDENTS] API request rejected: Query params not allowed. Use hierarchical endpoints via students.service.ts', 'API/STUDENTS');
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Query parameter requests are not allowed. Use hierarchical endpoints: /students/{province}/districts/{district}/... via students.service.ts',
+          code: 'QUERY_PARAMS_NOT_ALLOWED'
+        },
+        { status: 400 }
+      );
+    }
+    
     // Support both geip_school_ID (exact API field) and school_name (for backward compatibility)
     const geip_school_ID = searchParams.get('geip_school_ID') || searchParams.get('school_name') || undefined;
     const grade = searchParams.get('grade') || undefined;
@@ -33,31 +50,35 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '25', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    logger.info(`[STUDENTS] API request: province_ID=${province_id || 'all'}, district_name=${district_name || 'all'}, geip_school_ID=${geip_school_ID || 'all'}, grade=${grade || 'all'}, room=${room || 'all'}, student_type=${student_type || 'all'}, limit=${limit}, offset=${offset}`, 'API/STUDENTS');
+    logger.info(`[STUDENTS] API request: province_ID=${province_id}, district_name=${district_name}, geip_school_ID=${geip_school_ID || 'all'}, grade=${grade || 'all'}, room=${room || 'all'}, student_type=${student_type || 'all'}, limit=${limit}, offset=${offset}`, 'API/STUDENTS');
 
-    // Build URL for external API
-    // Base URL: /api/Base/data/v1/students/
-    // ALWAYS use query parameters (do NOT use path-based approach)
-    // Use exact API field names: province_ID, district_name, geip_school_ID, grade, room, student_type
-    const baseUrl = EXTERNAL_ENDPOINTS.STUDENTS.LIST.endsWith('/') 
-      ? EXTERNAL_ENDPOINTS.STUDENTS.LIST 
-      : `${EXTERNAL_ENDPOINTS.STUDENTS.LIST}/`;
+    // Build hierarchical endpoint using the DEEPEST possible scope
+    // This ensures maximum safety by using the most specific endpoint
+    let endpoint: string;
     
-    // Always use query parameter approach with exact API field names
+    if (province_id && district_name && geip_school_ID && grade && room) {
+      // Deepest: All filters available - use BY_ROOM
+      endpoint = EXTERNAL_ENDPOINTS.STUDENTS.BY_ROOM(province_id, district_name, geip_school_ID, grade, room);
+    } else if (province_id && district_name && geip_school_ID && grade) {
+      // Deep: School + Grade - use BY_GRADE
+      endpoint = EXTERNAL_ENDPOINTS.STUDENTS.BY_GRADE(province_id, district_name, geip_school_ID, grade);
+    } else if (province_id && district_name && geip_school_ID) {
+      // Medium: School only - use BY_SCHOOL
+      endpoint = EXTERNAL_ENDPOINTS.STUDENTS.BY_SCHOOL(province_id, district_name, geip_school_ID);
+    } else {
+      // Minimum: Province + District only - use BY_DISTRICT
+      endpoint = EXTERNAL_ENDPOINTS.STUDENTS.BY_DISTRICT(province_id, district_name);
+    }
+    
+    // Build query parameters for pagination and optional filters
     const queryParams = new URLSearchParams();
-    // Always include pagination
     queryParams.append('limit', limit.toString());
     queryParams.append('offset', offset.toString());
     
-    // Add filters using exact API field names
-    if (province_id) queryParams.append('province_ID', province_id); // API uses capital ID
-    if (district_name) queryParams.append('district_name', district_name);
-    if (geip_school_ID) queryParams.append('geip_school_ID', geip_school_ID); // Exact API field name
-    if (grade) queryParams.append('grade', grade);
-    if (room) queryParams.append('room', room);
+    // Add optional filters that are NOT in the path (only query params)
     if (student_type) queryParams.append('student_type', student_type);
     
-    const url = `${baseUrl}?${queryParams.toString()}`;
+    const url = `${endpoint}?${queryParams.toString()}`;
 
     const response = await apiClient.get(url, { token });
 
@@ -81,7 +102,8 @@ export async function GET(request: NextRequest) {
       }
       
       // Return 401 if the error is due to authentication
-      if (response.status === 401) {
+      // Check if error message indicates authentication failure
+      if (errorMsg.includes('Authentication') || errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
         return NextResponse.json(
           { success: false, error: 'Authentication expired. Please login again.' },
           { status: 401 }
