@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { schoolsService } from '@/lib/api';
+import { schoolService } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     logger.info(`Schools search request: ${JSON.stringify(params)}`, 'API/SCHOOLS/SEARCH');
 
-    const result = await schoolsService.search(token, params);
+    const result = await schoolService.search(token, params);
 
     if (!result.success) {
       logger.error(`Schools search failed: ${result.error}`, 'API/SCHOOLS/SEARCH');

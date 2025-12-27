@@ -59,12 +59,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Extract refresh token if available
+    const refreshToken = data.refresh_token || data.refresh || data.data?.refresh_token || data.refreshToken;
+
     logger.info(`User logged in: ${email}`, 'AUTH');
     
     // Create response with token and user data
     const response = NextResponse.json({
       success: true,
       token,
+      refresh_token: refreshToken || null, // Include refresh token if available
       user: data.user || data.data?.user || { email, name: email.split('@')[0] },
     });
 
@@ -79,6 +83,16 @@ export async function POST(request: NextRequest) {
       // No maxAge = session cookie that expires when browser closes
       // This ensures no persistent login - users must login again after closing browser
     });
+    
+    // Also store refresh token in cookie for server-side token refresh
+    if (refreshToken) {
+      response.cookies.set('refresh_token', refreshToken, {
+        httpOnly: false, // Allow client-side access
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      });
+    }
 
     return response;
   } catch (error: any) {

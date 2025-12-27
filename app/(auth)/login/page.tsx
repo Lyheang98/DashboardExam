@@ -6,7 +6,7 @@
 // - Redirects to dashboard on successful login
 // - Shows error messages for failed attempts
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  
+  // Refs for cleanup
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Don't auto-redirect on login page - let user login fresh
   // Middleware will handle redirect if they have a valid token
@@ -66,6 +70,20 @@ export default function LoginPage() {
     }
   }, [isRegistered, showToast]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any pending requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort('Component unmounted');
+      }
+      // Clear any pending timeouts
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   // Handle login submission
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -84,10 +102,21 @@ export default function LoginPage() {
       return;
     }
     
+    // Abort any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort('New login attempt started');
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
     const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
     const timeoutId = setTimeout(() => {
-      controller.abort();
+      controller.abort('Request timeout after 20 seconds');
     }, 20000);
+    timeoutRef.current = timeoutId;
     
     try {
       const res = await fetch('/api/auth', {
@@ -97,7 +126,10 @@ export default function LoginPage() {
         signal: controller.signal,
       });
 
+      // Clear timeout on successful response
       clearTimeout(timeoutId);
+      timeoutRef.current = null;
+      
       const text = await res.text();
       
       if (!text) {
@@ -127,6 +159,12 @@ export default function LoginPage() {
         showToast('Invalid response. No token received.', 'error');
         setLoading(false);
         return;
+      }
+
+      // Extract and store refresh token if available
+      const refreshToken = data.refresh_token;
+      if (refreshToken && typeof window !== 'undefined') {
+        sessionStorage.setItem('refresh_token', refreshToken);
       }
 
       const user = data.user || { 
@@ -163,14 +201,37 @@ export default function LoginPage() {
         router.push(destination);
       }, 300);
     } catch (err: any) {
-      clearTimeout(timeoutId);
+      // Always clear timeout in catch block
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      
+      // Clear abort controller ref if this was the current request
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      
+      // Ignore abort errors that are expected (timeout or component unmount)
+      if (err.name === 'AbortError') {
+        // Check if it was a timeout or manual abort
+        const abortReason = err.message || '';
+        if (abortReason.includes('timeout') || abortReason.includes('Request timeout')) {
+          // Timeout - show user-friendly message
+          showToast('Request timed out. Please check your connection and try again.', 'error');
+          setLoading(false);
+        } else {
+          // Component unmounted or new request started - silently ignore
+          console.log('[LOGIN] Request was aborted:', abortReason);
+          return; // Don't show error or update loading state
+        }
+        return;
+      }
+      
       console.error('[LOGIN] Error:', err);
       
       let errorMsg = 'Network error. Please try again.';
-      
-      if (err.name === 'AbortError') {
-        errorMsg = 'Request timed out. Please try again.';
-      } else if (err?.message) {
+      if (err?.message) {
         errorMsg = err.message;
       }
       

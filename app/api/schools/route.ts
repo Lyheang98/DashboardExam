@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { schoolsService } from '@/lib/api';
+import { schoolService } from '@/lib/api';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count of schools (target and not target)
-    const result = await schoolsService.getTotalCount(token);
+    const result = await schoolService.getTotalCount(token);
 
     if (!result.success) {
       return NextResponse.json(

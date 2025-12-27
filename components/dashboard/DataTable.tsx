@@ -69,10 +69,10 @@ function DataTableComponent<T extends Record<string, any>>({
   // Memoize rows to prevent unnecessary re-renders
   const tableRows = useMemo(() => {
     return data.map((row, index) => {
-      // Use custom key getter if provided, otherwise try id, then province_id, then index
+      // Use custom key getter if provided, otherwise try id, then create composite key, then index
       const rowKey = getRowKey 
         ? getRowKey(row, index)
-        : (row.id ?? row.province_id ?? row.district_id ?? row.school_id ?? index);
+        : (row.id ?? `${row.province_id || ''}:${row.district_name || ''}:${row.school_name || ''}:${index}`);
       
       return (
       <TableRow key={rowKey}>

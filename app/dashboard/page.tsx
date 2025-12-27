@@ -224,7 +224,7 @@ export default function DashboardPage() {
         }
 
         // Fetch with minimal params to get total_students
-        const response = await fetch('/api/students/provinces?limit=1&offset=0', {
+        const response = await fetch('/api/provinces?limit=1&offset=0', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

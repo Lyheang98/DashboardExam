@@ -17,9 +17,20 @@ export function getToken(): string | null {
   return sessionStorage.getItem("token");
 }
 
+export function setRefreshToken(refreshToken: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem("refresh_token", refreshToken);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem("refresh_token");
+}
+
 export function clearToken() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem("token");
+  sessionStorage.removeItem("refresh_token");
   sessionStorage.removeItem("user");
   // Clear cookie as well
   document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';

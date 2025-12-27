@@ -1,10 +1,21 @@
 /**
- * Schools Service
+ * School Service
+ * Handles all school-related data operations
+ * Provides caching, deduplication, and normalized data
+ * This is the SINGLE source of truth for all school operations
  */
 
-import { apiClient, EXTERNAL_ENDPOINTS } from '../client';
+import { getToken } from '../../auth';
 import { logger } from '../../logger';
-import { dataCache, CACHE_KEYS } from '@/lib/cache/dataCache';
+import { dataCache, CACHE_KEYS } from '../../cache/dataCache';
+import { apiClient, EXTERNAL_ENDPOINTS } from '../client';
+
+export interface SchoolData {
+  province_id: string;
+  district_name: string;
+  school_name: string;
+  total_count: number;
+}
 
 export interface School {
   id: string | number;
@@ -22,10 +33,11 @@ export interface School {
   [key: string]: any;
 }
 
-export interface SchoolsListResponse {
+export interface SchoolServiceResponse {
   success: boolean;
-  count: number;
-  data: School[];
+  data?: SchoolData[] | School[];
+  total_students?: number;
+  count?: number;
   next?: string | null;
   previous?: string | null;
   error?: string;
@@ -42,97 +54,222 @@ export interface SchoolSearchParams {
   offset?: number;
 }
 
-// Helper function to determine if a school is target based on school_type
-// Target schools = សាលាគោលដៅ (target school)
+export interface SchoolServiceParams {
+  limit?: number;
+  offset?: number;
+  province_id: string; // Required
+  district_name: string; // Required
+  school_name?: string;
+  q?: string; // Search query
+}
+
+const CACHE_KEY_PREFIX = 'school_service_';
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Generate cache key from parameters
+ */
+function getCacheKey(params: SchoolServiceParams): string {
+  const key = `limit_${params.limit || 1000}_offset_${params.offset || 0}_pid_${params.province_id}_dname_${params.district_name}_sname_${params.school_name || 'all'}_q_${params.q || 'all'}`;
+  return `${CACHE_KEY_PREFIX}${key}`;
+}
+
+/**
+ * Normalize school data to ensure consistent format
+ */
+function normalizeSchoolData(data: any[]): SchoolData[] {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  // Deduplicate by province_id + district_name + school_name combination
+  const schoolMap = new Map<string, SchoolData>();
+
+  for (const item of data) {
+    const provinceId = (item.province_id || item.id || item.province_ID || '').toString().trim();
+    const districtName = (item.district_name || item.name || item.district_Name || '').toString().trim();
+    const schoolName = (item.school_name || item.name || item.school_Name || '').toString().trim();
+    const totalCount = typeof item.total_count === 'number' ? item.total_count : 
+                      (typeof item.student_count === 'number' ? item.student_count :
+                      (typeof item.count === 'number' ? item.count : 0));
+
+    if (!provinceId || !districtName || !schoolName) {
+      continue; // Skip invalid records
+    }
+
+    // Use combination key for deduplication
+    const key = `${provinceId}:${districtName}:${schoolName}`;
+
+    if (schoolMap.has(key)) {
+      const existing = schoolMap.get(key)!;
+      // Merge counts if duplicate
+      existing.total_count += totalCount;
+    } else {
+      schoolMap.set(key, {
+        province_id: provinceId,
+        district_name: districtName,
+        school_name: schoolName,
+        total_count: totalCount,
+      });
+    }
+  }
+
+  return Array.from(schoolMap.values());
+}
+
+// Helper functions for school type detection (from schools.service.ts)
 function isTargetSchool(school: any): boolean {
-  // Always check school_type first, don't use API is_target/target fields
-  // because we want to calculate based on school_type_h and school_type_k
   const typeH = (school.school_type_h || '').toString();
   const typeK = (school.school_type_k || '').toString();
   
-  // Check if school_type contains "សាលាគោលដៅ" (target school)
   if (typeH.includes('សាលាគោលដៅ') || typeK.includes('សាលាគោលដៅ')) {
     return true;
   }
   
-  // Also check for SRS or NET-SRS as they might be target schools
   if (typeH.includes('SRS') || typeH.includes('NET-SRS')) {
-    // But exclude volunteer schools
     if (typeH.includes('សាលាស្ម័គ្រចិត្ត') || typeK.includes('សាលាស្ម័គ្រចិត្ត')) {
       return false;
     }
     return true;
   }
   
-  // Only use API fields if school_type doesn't exist
   if (!typeH && !typeK) {
     if (school.is_target !== undefined) return school.is_target === true;
     if (school.target !== undefined) return school.target === true;
   }
   
-  // Default to not target
   return false;
 }
 
-// Helper function to check if a school is a volunteer school (not target)
-// Not target schools = សាលាស្ម័គ្រចិត្ត (volunteer school)
 function isVolunteerSchool(school: any): boolean {
   const typeH = (school.school_type_h || '').toString();
   const typeK = (school.school_type_k || '').toString();
-  
-  // Check if school_type contains "សាលាស្ម័គ្រចិត្ត" (volunteer school)
   return typeH.includes('សាលាស្ម័គ្រចិត្ត') || typeK.includes('សាលាស្ម័គ្រចិត្ត');
 }
 
-// Helper function to check if a school is a GEIP school
-// GEIP school = has geip_school_ID
 function isGEIPSchool(school: any): boolean {
   return !!school.geip_school_ID;
 }
 
-// Helper function to check if a school is a GEIP AF school
-// GEIP AF = has geip_school_ID and contains "GEIP-AF" or "GEIP AF" in school_type or related fields
 function isGEIPAFSchool(school: any): boolean {
   if (!school.geip_school_ID) return false;
   
   const typeH = (school.school_type_h || '').toString().toUpperCase();
   const typeK = (school.school_type_k || '').toString().toUpperCase();
   const schoolType = (school.school_type || '').toString().toUpperCase();
-  const geipType = (school.geip_type || school.GEIP_type || '').toString().toUpperCase();
   
-  // Check for "GEIP-AF" or "GEIP AF" patterns
-  return typeH.includes('GEIP-AF') || typeK.includes('GEIP-AF') ||
-         typeH.includes('GEIP AF') || typeK.includes('GEIP AF') ||
-         schoolType.includes('GEIP-AF') || schoolType.includes('GEIP AF') ||
-         geipType.includes('GEIP-AF') || geipType.includes('GEIP AF') ||
-         school.GEIP_AF === true || school.geip_af === true ||
-         school.geip_type === 'GEIP-AF' || school.GEIP_type === 'GEIP-AF';
+  return typeH.includes('GEIP-AF') || typeH.includes('GEIP AF') ||
+         typeK.includes('GEIP-AF') || typeK.includes('GEIP AF') ||
+         schoolType.includes('GEIP-AF') || schoolType.includes('GEIP AF');
 }
 
-// Helper function to check if a school is a GEIP school (but NOT GEIP-AF)
-// GEIP = school_type_h is exactly "GEIP" (not "GEIP-AF")
-// This matches the filter logic exactly
 function isGEIPSchoolOnly(school: any): boolean {
-  const typeH = (school.school_type_h || '').toString();
-  const typeK = (school.school_type_k || '').toString();
-  
-  // Check for exact match with "GEIP" (case-insensitive)
-  const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
-  
-  if (exactGEIP) {
-    // Make sure it's not GEIP-AF
-    const isAF = typeH.toLowerCase().includes('geip-af') || 
-                typeK.toLowerCase().includes('geip-af') ||
-                typeH.toLowerCase().includes('geip af') || 
-                typeK.toLowerCase().includes('geip af');
-    return !isAF; // Return true only if it's NOT GEIP-AF
-  }
-  
-  return false;
+  if (!isGEIPSchool(school)) return false;
+  return !isGEIPAFSchool(school);
 }
 
-export const schoolsService = {
-  async getAll(token: string, params?: SchoolSearchParams) {
+export const schoolService = {
+  /**
+   * Get schools with aggregated student counts
+   * Requires province_id and district_name
+   * Used by Student page for school dropdowns
+   */
+  async getAll(params: SchoolServiceParams): Promise<SchoolServiceResponse> {
+    try {
+      // Validate required parameters
+      if (!params.province_id || !params.district_name) {
+        return {
+          success: false,
+          error: 'province_id and district_name are required',
+        };
+      }
+
+      const token = getToken();
+      if (!token) {
+        return {
+          success: false,
+          error: 'Authentication required',
+        };
+      }
+
+      // Check cache first
+      const cacheKey = getCacheKey(params);
+      const cached = dataCache.get<SchoolServiceResponse>(cacheKey);
+      if (cached && cached.success && cached.data) {
+        logger.info(`[SCHOOL_SERVICE] Cache hit for key: ${cacheKey}`, 'SCHOOL_SERVICE');
+        return cached;
+      }
+
+      // Build API URL
+      const queryParams = new URLSearchParams();
+      queryParams.append('province_id', params.province_id);
+      queryParams.append('district_name', params.district_name);
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      if (params.offset) queryParams.append('offset', params.offset.toString());
+      if (params.school_name) queryParams.append('school_name', params.school_name);
+      if (params.q) queryParams.append('q', params.q);
+
+      const url = `/api/schools/list?${queryParams.toString()}`;
+
+      logger.info(`[SCHOOL_SERVICE] Fetching schools: ${url}`, 'SCHOOL_SERVICE');
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error(`[SCHOOL_SERVICE] API error ${response.status}: ${errorText}`, 'SCHOOL_SERVICE');
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${errorText}`,
+        };
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        logger.error(`[SCHOOL_SERVICE] API returned error: ${result.error}`, 'SCHOOL_SERVICE');
+        return {
+          success: false,
+          error: result.error || 'Failed to fetch schools',
+        };
+      }
+
+      // Normalize and deduplicate data
+      const normalizedData = normalizeSchoolData(result.data || []);
+      const totalStudents = normalizedData.reduce((sum, s) => sum + (s.total_count || 0), 0);
+
+      const responseData: SchoolServiceResponse = {
+        success: true,
+        data: normalizedData,
+        count: normalizedData.length,
+        total_students: result.total_students || totalStudents,
+      };
+
+      // Cache the result
+      dataCache.set(cacheKey, responseData, CACHE_TTL);
+      logger.info(`[SCHOOL_SERVICE] Cached ${normalizedData.length} schools`, 'SCHOOL_SERVICE');
+
+      return responseData;
+    } catch (error: any) {
+      logger.error(`[SCHOOL_SERVICE] Error: ${error.message}`, 'SCHOOL_SERVICE', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch schools',
+      };
+    }
+  },
+
+  /**
+   * Get all schools (for School page)
+   * Fetches all schools from external API with pagination support
+   */
+  async getAllSchools(token: string, params?: SchoolSearchParams): Promise<SchoolServiceResponse> {
     try {
       let url = EXTERNAL_ENDPOINTS.SCHOOLS.LIST;
       const queryParams = new URLSearchParams();
@@ -152,19 +289,16 @@ export const schoolsService = {
 
       const data = response.data as any;
       
-      // Handle paginated response structure: { count, next, previous, results: [...] }
       const totalCount = data.count || 0;
       const next = data.next || null;
       const previous = data.previous || null;
       const schools = data.results || data.data || data.schools || (Array.isArray(data) ? data : []);
 
       const formattedSchools = schools.map((school: any): School => {
-        // Calculate target status first
         const calculatedIsTarget = isTargetSchool(school);
         
-        // Build school object preserving all original data
         return {
-          ...school, // Preserve all original properties from API first
+          ...school,
           id: school.geip_school_ID || school.id || school.pk || school.school_id || '',
           geip_school_ID: school.geip_school_ID,
           school_name: school.school_name || school.name || '',
@@ -175,9 +309,6 @@ export const schoolsService = {
           school_code: school.school_code,
           school_type_h: school.school_type_h,
           school_type_k: school.school_type_k,
-          // Override with calculated target status based on school_type
-          // - Target schools: have "សាលាគោលដៅ" (target school) in school_type_h or school_type_k
-          // - Not target schools: have "សាលាស្ម័គ្រចិត្ត" (volunteer school) in school_type_h or school_type_k
           is_target: calculatedIsTarget,
           target: calculatedIsTarget,
         };
@@ -191,26 +322,27 @@ export const schoolsService = {
         previous
       };
     } catch (error: any) {
-      logger.error('Get schools error', 'SCHOOLS', error);
+      logger.error('Get all schools error', 'SCHOOL_SERVICE', error);
       return { success: false, error: error.message || 'Failed to fetch schools', data: [], count: 0 };
     }
   },
 
-  async search(token: string, params: SchoolSearchParams) {
+  /**
+   * Search schools with filters (for School page)
+   * Fetches all schools and applies client-side filtering
+   */
+  async search(token: string, params: SchoolSearchParams): Promise<SchoolServiceResponse> {
     try {
-      // Create cache key based on params (exclude pagination for base cache)
       const cacheKey = CACHE_KEYS.SCHOOLS_LIST(
         JSON.stringify({ q: params.q, province: params.province, district: params.district, school_type: params.school_type, is_target: params.is_target })
       );
-      const cacheTTL = 30 * 60 * 1000; // 30 minutes TTL
+      const cacheTTL = 30 * 60 * 1000;
 
-      // Check if filters are applied - defined once here and used throughout the function
       const hasFilters = !!(params.q || params.province || params.district || params.school_type || params.is_target);
 
-      // Check cache first (only for base data without filters or with same filters)
       const cached = dataCache.get<School[]>(cacheKey);
       if (cached) {
-        logger.info(`Using cached schools data: ${cached.length} schools`, 'SCHOOLS');
+        logger.info(`Using cached schools data: ${cached.length} schools`, 'SCHOOL_SERVICE');
         return {
           success: true,
           data: cached,
@@ -223,38 +355,35 @@ export const schoolsService = {
       // Fetch ALL schools using optimized parallel pagination
       const allSchools: School[] = [];
       let offset = 0;
-      const limit = 2000; // Increased batch size for faster fetching
-      const maxConcurrentBatches = 5; // Fetch 5 batches in parallel
+      const limit = 2000;
+      const maxConcurrentBatches = 5;
       let hasMore = true;
       let totalCount = 0;
 
-      // Fetch first batch to get total count
-      const firstBatchResult = await this.getAll(token, { limit, offset });
+      const firstBatchResult = await this.getAllSchools(token, { limit, offset });
       
       if (!firstBatchResult.success) {
-        logger.error(`Failed to fetch first schools batch`, 'SCHOOLS', firstBatchResult.error);
+        logger.error(`Failed to fetch first schools batch`, 'SCHOOL_SERVICE', firstBatchResult.error);
         return { success: false, error: firstBatchResult.error || 'Failed to fetch schools', data: [], count: 0 };
       }
 
       totalCount = firstBatchResult.count || 0;
-      const firstBatch = firstBatchResult.data || [];
+      const firstBatch = (firstBatchResult.data || []) as School[];
       if (firstBatch.length > 0) {
         allSchools.push(...firstBatch);
         offset += limit;
         hasMore = firstBatchResult.next !== null && firstBatch.length === limit;
       }
 
-      // Fetch remaining batches in parallel for maximum speed
       while (hasMore && allSchools.length < totalCount) {
         const batchPromises: Promise<any>[] = [];
         const batchOffsets: number[] = [];
         
-        // Prepare parallel batch requests
         for (let i = 0; i < maxConcurrentBatches && offset < totalCount; i++) {
           const currentOffset = offset + (i * limit);
           if (currentOffset < totalCount) {
             batchOffsets.push(currentOffset);
-            batchPromises.push(this.getAll(token, { limit, offset: currentOffset }));
+            batchPromises.push(this.getAllSchools(token, { limit, offset: currentOffset }));
           }
         }
         
@@ -263,7 +392,6 @@ export const schoolsService = {
           break;
         }
 
-        // Execute parallel batches
         const batchResults = await Promise.all(batchPromises);
         
         let foundData = false;
@@ -272,11 +400,11 @@ export const schoolsService = {
           const batchOffset = batchOffsets[i];
           
           if (!batchResult.success) {
-            logger.warn(`Failed to fetch schools batch at offset ${batchOffset}`, 'SCHOOLS', batchResult.error);
+            logger.warn(`Failed to fetch schools batch at offset ${batchOffset}`, 'SCHOOL_SERVICE', batchResult.error);
             continue;
           }
 
-          const batch = batchResult.data || [];
+          const batch = (batchResult.data || []) as School[];
           if (batch.length === 0) {
             hasMore = false;
             break;
@@ -288,28 +416,24 @@ export const schoolsService = {
 
         offset += limit * maxConcurrentBatches;
         
-        // Check if there are more pages
-        const lastBatchData = batchResults[batchResults.length - 1]?.data || [];
+        const lastBatchData = (batchResults[batchResults.length - 1]?.data || []) as School[];
         hasMore = foundData && 
                   lastBatchData.length === limit && 
                   allSchools.length < totalCount &&
                   offset < totalCount;
 
-        // Safety check to prevent infinite loops
         if (totalCount > 0 && allSchools.length >= totalCount) {
           hasMore = false;
         }
       }
 
-      logger.info(`Fetched ${allSchools.length} schools total (API reported: ${totalCount})`, 'SCHOOLS');
+      logger.info(`Fetched ${allSchools.length} schools total (API reported: ${totalCount})`, 'SCHOOL_SERVICE');
 
-      // Use totalCount from API as the base count (should be 1825)
       const baseTotalCount = totalCount > 0 ? totalCount : allSchools.length;
 
       // Apply filters
       let filteredSchools = allSchools;
 
-      // Filter by search query (school name)
       if (params.q) {
         const query = params.q.toLowerCase();
         filteredSchools = filteredSchools.filter((school) => {
@@ -318,7 +442,6 @@ export const schoolsService = {
         });
       }
 
-      // Filter by province
       if (params.province) {
         filteredSchools = filteredSchools.filter((school) => {
           const province = (school.province_name || '').toLowerCase();
@@ -326,7 +449,6 @@ export const schoolsService = {
         });
       }
 
-      // Filter by district
       if (params.district) {
         filteredSchools = filteredSchools.filter((school) => {
           const district = (school.district_name || '').toLowerCase();
@@ -334,34 +456,28 @@ export const schoolsService = {
         });
       }
 
-      // Filter by school type
       if (params.school_type) {
         const filterType = params.school_type.trim();
         filteredSchools = filteredSchools.filter((school) => {
           const typeH = (school.school_type_h || '').toString();
           const typeK = (school.school_type_k || '').toString();
           
-          // For "GEIP" filter, show only schools where school_type_h is exactly "GEIP" (not "GEIP-AF")
           if (filterType.toLowerCase() === 'geip') {
-            // Check for exact match with "GEIP" but exclude "GEIP-AF" or "GEIP AF"
             const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
             if (exactGEIP) {
-              // Make sure it's not GEIP-AF
               const isAF = typeH.toLowerCase().includes('geip-af') || 
                           typeK.toLowerCase().includes('geip-af') ||
                           typeH.toLowerCase().includes('geip af') || 
                           typeK.toLowerCase().includes('geip af');
-              return !isAF; // Return true only if it's NOT GEIP-AF
+              return !isAF;
             }
             return false;
           }
           
-          // For "GEIP-AF" or "GEIP AF" filter, use the helper function
           if (filterType.toLowerCase() === 'geip-af' || filterType.toLowerCase() === 'geip af') {
             return isGEIPAFSchool(school);
           }
           
-          // For other filters, use exact match first, then fall back to includes
           const exactMatch = typeH.toLowerCase() === filterType.toLowerCase() || 
                            typeK.toLowerCase() === filterType.toLowerCase();
           if (exactMatch) return true;
@@ -371,36 +487,27 @@ export const schoolsService = {
         });
       }
 
-      // Filter by target status
       if (params.is_target !== undefined && params.is_target !== '') {
-        // Handle string values: 'true', '1' for target schools, 'false', '0' for non-target schools
         const isTargetValue = params.is_target === 'true' || params.is_target === '1';
         const isNonTargetValue = params.is_target === 'false' || params.is_target === '0';
         
         if (isTargetValue) {
-          // Filter for target schools only
           filteredSchools = filteredSchools.filter((school) => {
             return isTargetSchool(school) === true;
           });
         } else if (isNonTargetValue) {
-          // Filter for non-target schools only
           filteredSchools = filteredSchools.filter((school) => {
             return isTargetSchool(school) === false;
           });
         }
       }
 
-      // If no filters are applied, return the total count from API (1825)
-      // Otherwise, return the filtered count
       const finalCount = hasFilters ? filteredSchools.length : baseTotalCount;
 
-      // Cache the unfiltered or filtered results (depending on whether filters were applied)
-      // Cache base data (no filters) for reuse
       if (!hasFilters) {
         dataCache.set(cacheKey, filteredSchools, cacheTTL);
-        logger.info(`Cached ${filteredSchools.length} schools for future requests`, 'SCHOOLS');
+        logger.info(`Cached ${filteredSchools.length} schools for future requests`, 'SCHOOL_SERVICE');
       } else {
-        // Also cache filtered results for faster subsequent requests with same filters
         dataCache.set(cacheKey, filteredSchools, cacheTTL);
       }
 
@@ -408,53 +515,51 @@ export const schoolsService = {
         success: true, 
         data: filteredSchools, 
         count: finalCount,
-        next: null, // No pagination for filtered results
+        next: null,
         previous: null 
       };
     } catch (error: any) {
-      logger.error('Search schools error', 'SCHOOLS', error);
+      logger.error('Search schools error', 'SCHOOL_SERVICE', error);
       return { success: false, error: error.message || 'Failed to search schools', data: [], count: 0 };
     }
   },
 
+  /**
+   * Get total count of schools with breakdowns
+   */
   async getTotalCount(token: string): Promise<{ success: boolean; total: number; target: number; notTarget: number; geipSchool: number; geipAF: number; error?: string }> {
     try {
-      // Check cache first
       const cacheKey = CACHE_KEYS.SCHOOLS_COUNT;
       const cached = dataCache.get<{ total: number; target: number; notTarget: number; geipSchool: number; geipAF: number }>(cacheKey);
       if (cached) {
-        logger.info('Using cached schools count', 'SCHOOLS');
+        logger.info('Using cached schools count', 'SCHOOL_SERVICE');
         return { 
           success: true, 
           ...cached 
         };
       }
 
-      // Optimized fetching: count as we fetch (streaming approach) for better performance
-      const limit = 2000; // Increased batch size for faster fetching
-      const maxConcurrentBatches = 5; // Fetch 5 batches in parallel
+      const limit = 2000;
+      const maxConcurrentBatches = 5;
       let offset = 0;
       let total = 0;
       let hasMore = true;
       
-      // Counters - count schools as we fetch them instead of storing all in memory
       let targetCount = 0;
       let notTargetCount = 0;
       let geipAFCount = 0;
       let geipSchoolCount = 0;
       let processedCount = 0;
 
-      // Fetch first batch to get total count
-      const firstBatchResult = await this.getAll(token, { limit, offset });
+      const firstBatchResult = await this.getAllSchools(token, { limit, offset });
       
       if (!firstBatchResult.success) {
         return { success: false, total: 0, target: 0, notTarget: 0, geipSchool: 0, geipAF: 0, error: firstBatchResult.error };
       }
 
       total = firstBatchResult.count || 0;
-      const firstBatch = firstBatchResult.data || [];
+      const firstBatch = (firstBatchResult.data || []) as School[];
       
-      // Process first batch immediately
       for (const school of firstBatch) {
         if (isTargetSchool(school)) targetCount++;
         if (isVolunteerSchool(school)) notTargetCount++;
@@ -466,17 +571,15 @@ export const schoolsService = {
       offset += limit;
       hasMore = firstBatchResult.next !== null && firstBatch.length === limit;
 
-      // Fetch remaining batches in parallel for maximum speed
       while (hasMore && processedCount < total) {
         const batchPromises: Promise<any>[] = [];
         const batchOffsets: number[] = [];
         
-        // Prepare parallel batch requests
         for (let i = 0; i < maxConcurrentBatches && offset < total; i++) {
           const currentOffset = offset + (i * limit);
           if (currentOffset < total) {
             batchOffsets.push(currentOffset);
-            batchPromises.push(this.getAll(token, { limit, offset: currentOffset }));
+            batchPromises.push(this.getAllSchools(token, { limit, offset: currentOffset }));
           }
         }
         
@@ -485,25 +588,22 @@ export const schoolsService = {
           break;
         }
 
-        // Execute parallel batches
         const batchResults = await Promise.all(batchPromises);
         
-        // Process all batches
         for (let i = 0; i < batchResults.length; i++) {
           const batchResult = batchResults[i];
           
           if (!batchResult.success) {
-            logger.warn(`Failed to fetch schools batch at offset ${batchOffsets[i]}`, 'SCHOOLS', batchResult.error);
+            logger.warn(`Failed to fetch schools batch at offset ${batchOffsets[i]}`, 'SCHOOL_SERVICE', batchResult.error);
             continue;
           }
           
-          const batch = batchResult.data || [];
+          const batch = (batchResult.data || []) as School[];
           if (batch.length === 0) {
             hasMore = false;
             break;
           }
           
-          // Process batch immediately
           for (const school of batch) {
             if (isTargetSchool(school)) targetCount++;
             if (isVolunteerSchool(school)) notTargetCount++;
@@ -515,19 +615,17 @@ export const schoolsService = {
 
         offset += limit * maxConcurrentBatches;
         
-        // Check if there are more pages
-        const lastBatchData = batchResults[batchResults.length - 1]?.data || [];
+        const lastBatchData = (batchResults[batchResults.length - 1]?.data || []) as School[];
         hasMore = lastBatchData.length === limit && 
                   processedCount < total &&
                   offset < total;
         
-        // Early exit if we've processed all schools
         if (total > 0 && processedCount >= total) {
           hasMore = false;
         }
       }
 
-      logger.info(`Processed ${processedCount} schools for counts`, 'SCHOOLS');
+      logger.info(`Processed ${processedCount} schools for counts`, 'SCHOOL_SERVICE');
 
       const result = { 
         success: true, 
@@ -538,21 +636,23 @@ export const schoolsService = {
         geipAF: geipAFCount 
       };
 
-      // Cache the result for 30 minutes
       dataCache.set(cacheKey, result, 30 * 60 * 1000);
       
       return result;
     } catch (error: any) {
-      logger.error('Get schools total count error', 'SCHOOLS', error);
+      logger.error('Get schools total count error', 'SCHOOL_SERVICE', error);
       return { success: false, total: 0, target: 0, notTarget: 0, geipSchool: 0, geipAF: 0, error: error.message || 'Failed to fetch schools count' };
     }
   },
 
-  async getById(token: string, id: string | number) {
+  /**
+   * Get school by ID
+   */
+  async getById(token: string, id: string | number): Promise<{ success: boolean; data?: School; error?: string }> {
     try {
       return await apiClient.get<School>(EXTERNAL_ENDPOINTS.SCHOOLS.DETAIL(id), { token });
     } catch (error: any) {
-      logger.error(`Get school error: ${id}`, 'SCHOOLS', error);
+      logger.error(`Get school error: ${id}`, 'SCHOOL_SERVICE', error);
       return { success: false, error: error.message || 'Failed to fetch school' };
     }
   },

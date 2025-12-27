@@ -16,6 +16,7 @@ export interface RequestOptions {
   token?: string;
   timeout?: number;
   retries?: number;
+  signal?: AbortSignal;
 }
 
 export interface PaginationParams {

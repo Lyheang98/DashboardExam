@@ -6,12 +6,25 @@ export { API_CONFIG, EXTERNAL_ENDPOINTS, INTERNAL_ENDPOINTS } from './config';
 export { apiClient, apiRequest } from './client';
 export { authService } from './services/auth.service';
 export { usersService } from './services/users.service';
-export { schoolsService } from './services/schools.service';
+// schoolsService removed - use schoolService instead
 export { studentsService } from './services/students.service';
+export { studentIndexService } from './services/studentIndex.service';
+export { studentDetailService } from './services/studentDetail.service';
+export { provinceService } from './services/province.service';
+export { districtService } from './services/district.service';
+export { schoolService } from './services/school.service';
+// studentService removed - use studentIndexService instead
 
 export type { ApiResponse, RequestOptions, PaginationParams, PaginatedResponse } from './types';
 export type { LoginCredentials, LoginResponse, RegisterData } from './services/auth.service';
 export type { User, UserSearchParams, UsersListResponse } from './services/users.service';
-export type { School, SchoolsListResponse, SchoolSearchParams } from './services/schools.service';
+export type { School, SchoolSearchParams, SchoolServiceResponse, SchoolData, SchoolServiceParams } from './services/school.service';
+// SchoolsListResponse is now SchoolServiceResponse from school.service
+export type SchoolsListResponse = SchoolServiceResponse;
 export type { ProvinceSummary, ProvinceSummaryResponse, ProvinceSummaryParams } from './services/students.service';
+export type { DistrictSummary, SchoolSummary, StudentIndexListResponse } from './services/studentIndex.service';
+export type { StudentDetail, StudentDetailResponse, StudentDetailParams } from './services/studentDetail.service';
+export type { ProvinceData, ProvinceServiceResponse, ProvinceServiceParams } from './services/province.service';
+export type { DistrictData, DistrictServiceResponse, DistrictServiceParams } from './services/district.service';
+// StudentServiceResponse removed - use StudentIndexListResponse from studentIndexService instead
 

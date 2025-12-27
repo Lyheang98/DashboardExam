@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, ChevronDown, School, GraduationCap, MapPin, Building2, Heart, Map } from "lucide-react";
+import { LayoutDashboard, Users, Settings, ChevronDown, School, GraduationCap, MapPin, Building2, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -47,14 +47,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
   const menuItems = [
     { icon: LayoutDashboard, label: t.sidebar.dashboard, href: "/dashboard" },
-    { icon: School, label: t.sidebar.schools, href: "/dashboard/schools" },
   ];
 
   const dataMenuItems = [
     { id: 'province', icon: MapPin, label: 'Province', href: '/dashboard/student/province' },
     { id: 'district', icon: Map, label: 'District', href: '/dashboard/student/district' },
     { id: 'school', icon: Building2, label: 'School', href: '/dashboard/student/school' },
-    { id: 'disability', icon: Heart, label: 'Disability', href: '/dashboard/student/disability' },
     { id: 'students', icon: GraduationCap, label: 'Students', href: '/dashboard/student/students' },
   ];
 

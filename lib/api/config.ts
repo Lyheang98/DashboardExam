@@ -45,6 +45,20 @@ export const EXTERNAL_ENDPOINTS = {
     UPDATE: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
     DELETE: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
   },
+  PROVINCES: {
+    BASE: getEnv('EXTERNAL_API_PROVINCES_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/province/`),
+    LIST: getEnv('EXTERNAL_API_PROVINCES_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/province/`),
+  },
+  DISTRICTS: {
+    BASE: getEnv('EXTERNAL_API_DISTRICTS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/district/`),
+    LIST: getEnv('EXTERNAL_API_DISTRICTS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/district/`),
+    // Lookup endpoint requires province_id as path parameter
+    LOOKUP: (province_id: string) => `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/district/${province_id}/`,
+  },
+  SCHOOLS_LOOKUP: {
+    // Lookup endpoint requires province_id and district_name as path parameters
+    LIST: (province_id: string, district_name: string) => `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/school/${province_id}/${encodeURIComponent(district_name)}/`,
+  },
   SCHOOLS: {
     BASE: getEnv('EXTERNAL_API_SCHOOLS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/`),
     LIST: getEnv('EXTERNAL_API_SCHOOLS_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/schools/`),

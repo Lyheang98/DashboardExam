@@ -12,6 +12,7 @@ export interface LoginCredentials {
 
 export interface LoginResponse {
   token: string;
+  refresh_token?: string | null;
   user: {
     id: string | number;
     username: string;
@@ -110,8 +111,11 @@ export const authService = {
         is_staff: userData?.is_staff || userData?.is_admin || userData?.is_superuser || false,
       };
 
+      // Extract refresh token if available
+      const refreshToken = data.refresh_token || data.refresh || data.data?.refresh_token || data.refreshToken;
+
       logger.info(`Login successful for user: ${user.username}`, 'AUTH');
-      return { success: true, token, user };
+      return { success: true, token, refresh_token: refreshToken || null, user };
     } catch (error: any) {
       const errorMsg = error?.message || 'Login failed. Please check your connection.';
       logger.error(`Login service exception: ${errorMsg}`, 'AUTH', error);
@@ -140,7 +144,42 @@ export const authService = {
 
   async refreshToken(refreshToken: string) {
     try {
-      return await apiClient.post(EXTERNAL_ENDPOINTS.AUTH.REFRESH, { refresh: refreshToken });
+      // Django REST Framework token refresh expects form-urlencoded
+      const formData = new URLSearchParams();
+      formData.append('refresh', refreshToken);
+      
+      const response = await fetch(EXTERNAL_ENDPOINTS.AUTH.REFRESH, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData?.error || errorData?.message || errorData?.detail || 'Token refresh failed';
+        logger.error(`Token refresh failed: ${errorMsg}`, 'AUTH');
+        return { success: false, error: errorMsg };
+      }
+
+      const data = await response.json();
+      
+      // Extract token from various response formats
+      const token = data.token || data.access_token || data.access || data.data?.token;
+      
+      if (!token) {
+        logger.error('No token in refresh response', 'AUTH');
+        return { success: false, error: 'Invalid refresh response format' };
+      }
+
+      return { 
+        success: true, 
+        data: {
+          token,
+          refresh_token: data.refresh_token || data.refresh || refreshToken, // Keep old refresh token if new one not provided
+        }
+      };
     } catch (error: any) {
       logger.error('Token refresh error', 'AUTH', error);
       return { success: false, error: error.message || 'Token refresh failed' };
