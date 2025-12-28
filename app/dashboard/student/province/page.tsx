@@ -227,67 +227,65 @@ export default function ProvincePage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Header */}
-      <div className="mt-6">
-        <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' ? 'តម្រងខេត្ត' : 'Filter Province'}
-        </h1>
-        <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' 
-            ? 'មើលចំនួនសិស្សដែលបានបូកសរុបតាមខេត្ត'
-            : 'View student counts aggregated by province'
-          }
-        </p>
-      </div>
+      {/* ============================================ */}
+      {/* FILTER CONTAINER - Static Header */}
+      {/* ============================================ */}
+      <div className="w-full mt-1 md:mt-2 lg:mt-3 bg-white dark:bg-card rounded-lg border border-gray-200 dark:border-border shadow-sm">
+        {/* Filter Header - Static */}
+        <div className="p-6 pb-4">
+          <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' ? 'តម្រងខេត្ត' : 'Filter Province'}
+          </h1>
+          <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' 
+              ? 'មើលចំនួនសិស្សដែលបានបូកសរុបតាមខេត្ត'
+              : 'View student counts aggregated by province'
+            }
+          </p>
+        </div>
 
-      {/* ============================================ */}
-      {/* SEARCH AND FILTERS SECTION */}
-      {/* ============================================ */}
-      <div className="w-full
-  bg-white dark:bg-card
-  rounded-lg
-  border border-gray-200 dark:border-border
-  p-6 shadow-sm
-">
-        <div
-          className="w-full grid 
+        {/* Filter Content */}
+        <div className="px-6 pb-6 border-t border-gray-200 dark:border-border pt-6">
+          <div
+            className="w-full grid 
     grid-cols-1
     gap-4
     sm:grid-cols-2
     lg:grid-cols-2"
-        >
-          {/* Search by Name */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="search"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {language === 'km' ? 'ស្វែងរកតាមឈ្មោះ' : 'Search by Name'}
-            </Label>
-            <Input
-              id="search"
-              placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះខេត្ត...' : 'Search by province name...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
-            />
-          </div>
+          >
+            {/* Search by Name */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="search"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {language === 'km' ? 'ស្វែងរកតាមឈ្មោះ' : 'Search by Name'}
+              </Label>
+              <Input
+                id="search"
+                placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះខេត្ត...' : 'Search by province name...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
+              />
+            </div>
 
-          {/* Search by ID */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="province-id-search"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {language === 'km' ? 'ស្វែងរកតាមលេខសម្គាល់' : 'Search by ID'}
-            </Label>
-            <Input
-              id="province-id-search"
-              placeholder={language === 'km' ? 'ស្វែងរកតាមលេខសម្គាល់ខេត្ត...' : 'Search by province ID...'}
-              value={provinceIdQuery}
-              onChange={(e) => setProvinceIdQuery(e.target.value)}
-              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
-            />
+            {/* Search by ID */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="province-id-search"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {language === 'km' ? 'ស្វែងរកតាមលេខសម្គាល់' : 'Search by ID'}
+              </Label>
+              <Input
+                id="province-id-search"
+                placeholder={language === 'km' ? 'ស្វែងរកតាមលេខសម្គាល់ខេត្ត...' : 'Search by province ID...'}
+                value={provinceIdQuery}
+                onChange={(e) => setProvinceIdQuery(e.target.value)}
+                className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
+              />
+            </div>
           </div>
         </div>
       </div>

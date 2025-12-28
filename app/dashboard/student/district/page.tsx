@@ -306,78 +306,76 @@ export default function DistrictPage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Header */}
-      <div className="mt-6">
-        <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' ? 'តម្រងស្រុក' : 'Filter District'}
-        </h1>
-        <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' 
-            ? 'មើលចំនួនសិស្សដែលបានបូកសរុបតាមស្រុក'
-            : 'View student counts aggregated by district'
-          }
-        </p>
-      </div>
+      {/* ============================================ */}
+      {/* FILTER CONTAINER - Static Header */}
+      {/* ============================================ */}
+      <div className="w-full mt-1 md:mt-2 lg:mt-3 bg-white dark:bg-card rounded-lg border border-gray-200 dark:border-border shadow-sm">
+        {/* Filter Header - Static */}
+        <div className="p-6 pb-4">
+          <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' ? 'តម្រងស្រុក' : 'Filter District'}
+          </h1>
+          <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' 
+              ? 'មើលចំនួនសិស្សដែលបានបូកសរុបតាមស្រុក'
+              : 'View student counts aggregated by district'
+            }
+          </p>
+        </div>
 
-      {/* ============================================ */}
-      {/* SEARCH AND FILTERS SECTION */}
-      {/* ============================================ */}
-      <div className="w-full
-  bg-white dark:bg-card
-  rounded-lg
-  border border-gray-200 dark:border-border
-  p-6 shadow-sm
-">
-        <div
-          className="w-full grid 
+        {/* Filter Content */}
+        <div className="px-6 pb-6 border-t border-gray-200 dark:border-border pt-6">
+          <div
+            className="w-full grid 
     grid-cols-1
     gap-4
     sm:grid-cols-2
     lg:grid-cols-2"
-        >
-          {/* Province Filter */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="province-filter"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {language === 'km' ? 'ខេត្ត' : 'Province'}
-            </Label>
-            <select
-              id="province-filter"
-              value={filters.provinceId || 'all'}
-              onChange={(e) => setProvinceId(e.target.value === 'all' ? '' : e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
-            >
-              <option value="all" className="font-khmer">
-                {language === 'km' ? 'ខេត្តទាំងអស់' : 'All Provinces'}
-              </option>
-              {provinces.map((province) => {
-                const districtCount = provinceDistrictCounts.get(province.province_id) || 0;
-                return (
-                  <option key={province.province_id} value={province.province_id} className="font-khmer">
-                    {province.province_name} {districtCount > 0 ? `(${districtCount})` : ''}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          >
+            {/* Province Filter */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="province-filter"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {language === 'km' ? 'ខេត្ត' : 'Province'}
+              </Label>
+              <select
+                id="province-filter"
+                value={filters.provinceId || 'all'}
+                onChange={(e) => setProvinceId(e.target.value === 'all' ? '' : e.target.value)}
+                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
+              >
+                <option value="all" className="font-khmer">
+                  {language === 'km' ? 'ខេត្តទាំងអស់' : 'All Provinces'}
+                </option>
+                {provinces.map((province) => {
+                  const districtCount = provinceDistrictCounts.get(province.province_id) || 0;
+                  return (
+                    <option key={province.province_id} value={province.province_id} className="font-khmer">
+                      {province.province_name} {districtCount > 0 ? `(${districtCount})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
 
-          {/* Search Input */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="search"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {language === 'km' ? 'ស្វែងរក' : 'Search'}
-            </Label>
-            <Input
-              id="search"
-              placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះស្រុក...' : 'Search by district name...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQueryLocal(e.target.value)}
-              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
-            />
+            {/* Search Input */}
+            <div className="space-y-2">
+                <Label
+                  htmlFor="search"
+                  className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+                >
+                  {language === 'km' ? 'ស្វែងរក' : 'Search'}
+                </Label>
+                <Input
+                  id="search"
+                  placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះស្រុក...' : 'Search by district name...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQueryLocal(e.target.value)}
+                  className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
+                />
+            </div>
           </div>
         </div>
       </div>

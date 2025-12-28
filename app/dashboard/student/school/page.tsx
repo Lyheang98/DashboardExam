@@ -653,132 +653,123 @@ export default function SchoolsPage() {
   ], [t, language]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="mt-6">
-        <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' ? 'តម្រងសាលា' : 'Filter School'}
-        </h1>
-        <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
-          {t.schools.subtitle}
-        </p>
-      </div>
-
+    <div className="w-full space-y-6">
       {/* ============================================ */}
-      {/* SEARCH AND FILTERS SECTION */}
+      {/* FILTER CONTAINER - Static Header */}
       {/* ============================================ */}
-      <div className="
-  bg-white dark:bg-card
-  rounded-lg
-  border border-gray-200 dark:border-border
-  p-6 shadow-sm
-">
-        <div
-          className=" grid 
-    grid-cols-1
-    gap-3
-    sm:grid-cols-2
-    lg:grid-cols-3
-    xl:grid-cols-5"
-        >
-          {/* Search Input */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="search"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {t.schools.searchByName}
-            </Label>
-            <Input
-              id="search"
-              placeholder={t.schools.searchPlaceholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full font-khmer"
-            />
-          </div>
+      <div className="w-full mt-1 md:mt-2 lg:mt-3 bg-white dark:bg-card rounded-lg border border-gray-200 dark:border-border shadow-sm">
+        {/* Filter Header - Static */}
+        <div className="p-6 pb-4">
+          <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' ? 'តម្រងសាលា' : 'Filter School'}
+          </h1>
+          <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+            {t.schools.subtitle}
+          </p>
+        </div>
 
-          {/* Province Filter */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="province-filter"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {t.schools.province}
-            </Label>
-            <select
-              id="province-filter"
-              value={provinceFilter}
-              onChange={(e) => setProvinceFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
-            >
-              <option value="" className="font-khmer">{t.schools.allProvinces}</option>
-              {provinceList.map((province) => (
-                <option key={province.name} value={province.name} className="font-khmer">
-                  {province.name} ({province.count})
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Filter Content */}
+        <div className="px-6 pb-6 border-t border-gray-200 dark:border-border pt-6">
+          <div className="w-full grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {/* Search Input */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="search"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {t.schools.searchByName}
+              </Label>
+              <Input
+                id="search"
+                placeholder={t.schools.searchPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full font-khmer"
+              />
+            </div>
 
-          {/* District Filter */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="district-filter"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {t.schools.district}
-            </Label>
-            <Input
-              id="district-filter"
-              placeholder={`${t.common.filter} ${t.schools.district}...`}
-              value={districtFilter}
-              onChange={(e) => setDistrictFilter(e.target.value)}
-              className="w-full font-khmer"
-            />
-          </div>
+            {/* Province Filter */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="province-filter"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {t.schools.province}
+              </Label>
+              <select
+                id="province-filter"
+                value={provinceFilter}
+                onChange={(e) => setProvinceFilter(e.target.value)}
+                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
+              >
+                <option value="" className="font-khmer">{t.schools.allProvinces}</option>
+                {provinceList.map((province) => (
+                  <option key={province.name} value={province.name} className="font-khmer">
+                    {province.name} ({province.count})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* School Type Filter */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="school-type-filter"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {t.schools.schoolType}
-            </Label>
-            <select
-              id="school-type-filter"
-              value={schoolTypeFilter}
-              onChange={(e) => setSchoolTypeFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
-            >
-              <option value="" className="font-khmer">{t.schools.allTypes}</option>
-              {uniqueSchoolTypes.map((type) => (
-                <option key={type} value={type} className="font-khmer">
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* District Filter */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="district-filter"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {t.schools.district}
+              </Label>
+              <Input
+                id="district-filter"
+                placeholder={`${t.common.filter} ${t.schools.district}...`}
+                value={districtFilter}
+                onChange={(e) => setDistrictFilter(e.target.value)}
+                className="w-full font-khmer"
+              />
+            </div>
 
-          {/* Target Filter */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="target-filter"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {t.schools.targetStatus}
-            </Label>
-            <select
-              id="target-filter"
-              value={targetFilter}
-              onChange={(e) => setTargetFilter(e.target.value)}
-              className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allSchools}</option>
-              <option value="true" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.targetSchools}</option>
-              <option value="false" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.nonTargetSchools}</option>
-            </select>
+            {/* School Type Filter */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="school-type-filter"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {t.schools.schoolType}
+              </Label>
+              <select
+                id="school-type-filter"
+                value={schoolTypeFilter}
+                onChange={(e) => setSchoolTypeFilter(e.target.value)}
+                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
+              >
+                <option value="" className="font-khmer">{t.schools.allTypes}</option>
+                {uniqueSchoolTypes.map((type) => (
+                  <option key={type} value={type} className="font-khmer">
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Target Filter */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="target-filter"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {t.schools.targetStatus}
+              </Label>
+              <select
+                id="target-filter"
+                value={targetFilter}
+                onChange={(e) => setTargetFilter(e.target.value)}
+                className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allSchools}</option>
+                <option value="true" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.targetSchools}</option>
+                <option value="false" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.nonTargetSchools}</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -789,7 +780,7 @@ export default function SchoolsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-            {t.schools.title}
+            {language === 'km' ? 'សាលា' : 'School'}
           </h1>
           <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
             {t.schools.manageAndView} ({effectiveTotal} {t.schools.total})

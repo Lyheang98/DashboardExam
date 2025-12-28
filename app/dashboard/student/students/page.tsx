@@ -877,36 +877,33 @@ export default function StudentsPage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Header */}
-      <div className="mt-6">
-        <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' ? 'តម្រងសិស្ស' : 'Filter Students'}
-        </h1>
-        <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
-          {language === 'km' 
-            ? 'មើលព័ត៌មានលម្អិតរបស់សិស្ស'
-            : 'View detailed student information'
-          }
-        </p>
-      </div>
+      {/* ============================================ */}
+      {/* FILTER CONTAINER - Static Header */}
+      {/* ============================================ */}
+      <div className="w-full mt-1 md:mt-2 lg:mt-3 bg-white dark:bg-card rounded-lg border border-gray-200 dark:border-border shadow-sm">
+        {/* Filter Header - Static */}
+        <div className="p-6 pb-4">
+          <h1 className={`text-xl font-bold tracking-tight text-primary ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' ? 'តម្រងសិស្ស' : 'Filter Students'}
+          </h1>
+          <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
+            {language === 'km' 
+              ? 'មើលព័ត៌មានលម្អិតរបស់សិស្ស'
+              : 'View detailed student information'
+            }
+          </p>
+        </div>
 
-      {/* ============================================ */}
-      {/* FILTERS SECTION */}
-      {/* ============================================ */}
-      <div className="w-full
-  bg-white dark:bg-card
-  rounded-lg
-  border border-gray-200 dark:border-border
-  p-6 shadow-sm
-">
-        <div
-          className="w-full grid 
+        {/* Filter Content */}
+        <div className="px-6 pb-6 border-t border-gray-200 dark:border-border pt-6">
+          <div
+            className="w-full grid 
     grid-cols-1
     gap-4
     sm:grid-cols-2
     md:grid-cols-3
     lg:grid-cols-5"
-        >
+          >
           {/* Province Filter */}
           <div className="space-y-2">
             <Label
@@ -1070,52 +1067,53 @@ export default function StudentsPage() {
               </select>
             </div>
           )}
-        </div>
-
-        {/* Search Input and Buttons - Combined in one row */}
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 items-end">
-          {/* Search by Name */}
-          <div className="w-full space-y-2">
-            <Label
-              htmlFor="search-name"
-              className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {language === 'km' ? 'ស្វែងរកតាមឈ្មោះ' : 'Search by Name'} <span className="text-muted-foreground text-xs">(Optional)</span>
-            </Label>
-            <Input
-              id="search-name"
-              placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះសិស្ស...' : 'Search by student name...'}
-              value={nameSearch}
-              onChange={(e) => setNameSearch(e.target.value)}
-              className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
-            />
           </div>
 
-          {/* Clear Filters Button */}
-          <div className="w-full">
-            <Button
-              variant="outline"
-              onClick={handleClearFilters}
-              disabled={loading}
-              className={`w-full h-10 ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {language === 'km' ? 'លុបតម្រង' : 'Clear Filters'}
-            </Button>
-          </div>
+          {/* Search Input and Buttons - Combined in one row */}
+          <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 items-end">
+            {/* Search by Name */}
+            <div className="w-full space-y-2">
+              <Label
+                htmlFor="search-name"
+                className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {language === 'km' ? 'ស្វែងរកតាមឈ្មោះ' : 'Search by Name'} <span className="text-muted-foreground text-xs">(Optional)</span>
+              </Label>
+              <Input
+                id="search-name"
+                placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះសិស្ស...' : 'Search by student name...'}
+                value={nameSearch}
+                onChange={(e) => setNameSearch(e.target.value)}
+                className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
+              />
+            </div>
 
-          {/* Apply Filters Button */}
-          <div className="w-full">
-            <Button
-              onClick={handleApplyFilters}
-              disabled={loading || !canApplyFilters}
-              className={`w-full h-10 ${language === 'km' ? 'font-khmer' : ''}`}
-            >
-              {loading ? (
-                language === 'km' ? 'កំពុងផ្ទុក...' : 'Loading...'
-              ) : (
-                language === 'km' ? 'តម្រង' : 'Apply Filters'
-              )}
-            </Button>
+            {/* Clear Filters Button */}
+            <div className="w-full">
+              <Button
+                variant="outline"
+                onClick={handleClearFilters}
+                disabled={loading}
+                className={`w-full h-10 ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {language === 'km' ? 'លុបតម្រង' : 'Clear Filters'}
+              </Button>
+            </div>
+
+            {/* Apply Filters Button */}
+            <div className="w-full">
+              <Button
+                onClick={handleApplyFilters}
+                disabled={loading || !canApplyFilters}
+                className={`w-full h-10 ${language === 'km' ? 'font-khmer' : ''}`}
+              >
+                {loading ? (
+                  language === 'km' ? 'កំពុងផ្ទុក...' : 'Loading...'
+                ) : (
+                  language === 'km' ? 'តម្រង' : 'Apply Filters'
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
