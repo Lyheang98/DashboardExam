@@ -37,14 +37,7 @@ export default function HowToUsePage() {
             </p>
           </div>
           <div className="space-y-2">
-            <h3 className="font-semibold">3. Product Management</h3>
-            <p className="text-muted-foreground">
-              View and manage products in the Products section. Search, filter,
-              and update product information easily.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <h3 className="font-semibold">4. Settings</h3>
+            <h3 className="font-semibold">3. Settings</h3>
             <p className="text-muted-foreground">
               Configure your account settings, security preferences, and
               notification settings from the Settings page.
@@ -60,8 +53,8 @@ export default function HowToUsePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-            <li>Use the search functionality to quickly find users or products</li>
-            <li>Filter data by category, status, or date range for better insights</li>
+            <li>Use the search functionality to quickly find users or students</li>
+            <li>Filter data by status, province, district, or school for better insights</li>
             <li>Export data for reporting and analysis</li>
             <li>Customize your dashboard view based on your preferences</li>
           </ul>

@@ -91,7 +91,6 @@ export const dataCache = new DataCache();
 export const CACHE_KEYS = {
   SCHOOLS_COUNT: 'schools:count',
   USERS_LIST: 'users:list',
-  PRODUCTS_LIST: 'products:list',
   SCHOOLS_LIST: (params?: string) => `schools:list:${params || 'default'}`,
   USERS_SEARCH: (params?: string) => `users:search:${params || 'default'}`,
   PROVINCE_SUMMARY: (params?: string) => `province_summary:${params || 'all'}`,

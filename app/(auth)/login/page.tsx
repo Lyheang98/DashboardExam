@@ -6,7 +6,7 @@
 // - Redirects to dashboard on successful login
 // - Shows error messages for failed attempts
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/toast';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { IMAGE_PATHS } from '@/lib/images';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isRegistered = searchParams.get('registered') === 'true';
@@ -423,5 +423,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

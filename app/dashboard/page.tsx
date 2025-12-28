@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState, useMemo } from 'react';
-import { Users, Package, TrendingUp, DollarSign, School, GraduationCap } from 'lucide-react';
+import { School, GraduationCap } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/Statcard';
 import { DataControls } from '@/components/dashboard/DataControls';
 import { useLanguage } from '@/lib/i18n/context';
@@ -25,8 +25,7 @@ import { logger } from '@/lib/logger';
 import { getToken } from '@/lib/auth';
 import { dataCache, CACHE_KEYS } from '@/lib/cache/dataCache';
 import { cacheHandlers } from '@/lib/cache/cacheHandlers';
-import { DashboardUser, DashboardProduct, Granularity } from './types';
-import { fetchDashboardData } from './utils';
+import { Granularity } from './types';
 import { ChartSection } from './components/ChartSection';
 import { getProvinces } from '@/lib/constants/provinces';
 
@@ -39,8 +38,6 @@ export default function DashboardPage() {
   const { t } = useLanguage();
   
   // State management
-  const [users, setUsers] = useState<DashboardUser[]>([]);
-  const [products, setProducts] = useState<DashboardProduct[]>([]);
   const [totalSchools, setTotalSchools] = useState<number>(0);
   const [targetSchools, setTargetSchools] = useState<number>(0);
   const [notTargetSchools, setNotTargetSchools] = useState<number>(0);
@@ -50,9 +47,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // Force refresh trigger
   const [usersGran, setUsersGran] = useState<Granularity>(DEFAULT_GRANULARITY);
-  const [productsGran, setProductsGran] = useState<Granularity>(DEFAULT_GRANULARITY);
   const [usersYear, setUsersYear] = useState(DEFAULT_YEAR);
-  const [productsYear, setProductsYear] = useState(DEFAULT_YEAR);
   const [mounted, setMounted] = useState(false);
 
   // Initialize component (hydration safety)
@@ -60,138 +55,177 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
-  // Fetch dashboard data on mount with cancellation support
-  useEffect(() => {
-    const controller = new AbortController();
-    let isMounted = true;
-    
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const { users: fetchedUsers, products: fetchedProducts } = await fetchDashboardData(controller.signal);
-        
-        // Only update state if component is still mounted and request wasn't cancelled
-        if (isMounted && !controller.signal.aborted) {
-          setUsers(fetchedUsers);
-          setProducts(fetchedProducts);
-        }
-      } catch (error: any) {
-        // Don't update state if request was aborted
-        if (isMounted && error?.name !== 'AbortError') {
-          logger.error('Failed to load dashboard data', 'DASHBOARD', error);
-          setUsers([]);
-          setProducts([]);
-        }
-      } finally {
-        if (isMounted && !controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadData();
-
-    // Cleanup: cancel request if component unmount or dependencies change
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, []);
-
-  // Fetch schools total count with caching
+  // Fetch ALL dashboard data in parallel for better performance
   useEffect(() => {
     if (!mounted) return; // Wait for component to mount
     
     const controller = new AbortController();
     let isMounted = true;
 
-    const fetchSchoolsCount = async (forceRefresh = false) => {
+    const fetchAllDashboardData = async (forceRefresh = false) => {
       try {
+        setLoading(true);
         const token = getToken();
         if (!token) {
-          logger.warn('No token available for schools fetch', 'DASHBOARD');
+          logger.warn('No token available for dashboard fetch', 'DASHBOARD');
+          setLoading(false);
           return;
         }
 
         // Check cache first (unless force refresh)
-        if (!forceRefresh) {
-          const cached = dataCache.get<{
-            total: number;
-            target: number;
-            notTarget: number;
-            geipSchool: number;
-            geipAF: number;
-          }>(CACHE_KEYS.SCHOOLS_COUNT);
-          
-          if (cached) {
-            logger.info('Using cached schools count', 'DASHBOARD');
-            if (isMounted && !controller.signal.aborted) {
-              setTotalSchools(cached.total);
-              setTargetSchools(cached.target);
-              setNotTargetSchools(cached.notTarget);
-              setGeipSchools(cached.geipSchool);
-              setGeipAFSchools(cached.geipAF);
-            }
-            return;
-          }
+        const schoolsCacheKey = CACHE_KEYS.SCHOOLS_COUNT;
+        const studentsCacheKey = 'dashboard:total_students_count';
+        
+        const cachedSchools = !forceRefresh ? dataCache.get<{
+          total: number;
+          target: number;
+          notTarget: number;
+          geipSchool: number;
+          geipAF: number;
+        }>(schoolsCacheKey) : null;
+        
+        const cachedStudents = !forceRefresh ? dataCache.get<number>(studentsCacheKey) : null;
+
+        // Prepare parallel fetch promises
+        const fetchPromises: Promise<any>[] = [];
+
+        // Fetch schools (only if not cached)
+        let schoolsPromise: Promise<any> | null = null;
+        if (!cachedSchools) {
+          schoolsPromise = fetch('/api/schools', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          })
+            .then(async (response) => {
+              if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
+              }
+              return response.json();
+            })
+            .then((data) => {
+              if (data.success) {
+                const schoolsData = {
+                  total: data.total || 0,
+                  target: data.target || 0,
+                  notTarget: data.notTarget || 0,
+                  geipSchool: data.geipSchool || 0,
+                  geipAF: data.geipAF || 0,
+                };
+                // Cache for 5 minutes
+                dataCache.set(schoolsCacheKey, schoolsData, 5 * 60 * 1000);
+                return schoolsData;
+              }
+              throw new Error(data.error || 'Unknown error');
+            })
+            .catch((error) => {
+              if (error?.name !== 'AbortError') {
+                logger.error('Failed to fetch schools count', 'DASHBOARD', error);
+              }
+              return { total: 0, target: 0, notTarget: 0, geipSchool: 0, geipAF: 0 };
+            });
+          fetchPromises.push(schoolsPromise);
         }
 
-        const response = await fetch('/api/schools', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
+        // Fetch students (only if not cached)
+        let studentsPromise: Promise<any> | null = null;
+        if (!cachedStudents) {
+          studentsPromise = fetch(`/api/dashboard/students/count`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          })
+            .then(async (response) => {
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              return response.json();
+            })
+            .then((data) => {
+              if (data.success && data.count !== undefined) {
+                const total = data.count || 0;
+                // Cache for 30 minutes
+                dataCache.set(studentsCacheKey, total, 30 * 60 * 1000);
+                return total;
+              }
+              throw new Error('Dashboard API did not return count field');
+            })
+            .catch((error) => {
+              if (error?.name !== 'AbortError') {
+                logger.error('Failed to fetch total students count', 'DASHBOARD', error);
+              }
+              return 0;
+            });
+          fetchPromises.push(studentsPromise);
         }
 
-        const data = await response.json();
+        // Execute all fetches in parallel
+        const results = await Promise.allSettled(fetchPromises);
 
-        if (isMounted && !controller.signal.aborted) {
-          if (data.success) {
-            const schoolsData = {
-              total: data.total || 0,
-              target: data.target || 0,
-              notTarget: data.notTarget || 0,
-              geipSchool: data.geipSchool || 0,
-              geipAF: data.geipAF || 0,
-            };
-            
-            // Cache the data (5 minute TTL)
-            dataCache.set(CACHE_KEYS.SCHOOLS_COUNT, schoolsData, 5 * 60 * 1000);
-            
+        // Only update state if component is still mounted and request wasn't cancelled
+        if (!isMounted || controller.signal.aborted) {
+          return;
+        }
+
+        // Process results
+        let resultIndex = 0;
+
+        // Process schools
+        if (cachedSchools) {
+          setTotalSchools(cachedSchools.total);
+          setTargetSchools(cachedSchools.target);
+          setNotTargetSchools(cachedSchools.notTarget);
+          setGeipSchools(cachedSchools.geipSchool);
+          setGeipAFSchools(cachedSchools.geipAF);
+          logger.info('Using cached schools count', 'DASHBOARD');
+        } else if (schoolsPromise) {
+          const schoolsResult = results[resultIndex];
+          if (schoolsResult?.status === 'fulfilled') {
+            const schoolsData = schoolsResult.value;
             setTotalSchools(schoolsData.total);
             setTargetSchools(schoolsData.target);
             setNotTargetSchools(schoolsData.notTarget);
             setGeipSchools(schoolsData.geipSchool);
             setGeipAFSchools(schoolsData.geipAF);
-            logger.info(`Schools count fetched: Total=${schoolsData.total}, Target=${schoolsData.target}, NotTarget=${schoolsData.notTarget}, GEIP=${schoolsData.geipSchool}, GEIP AF=${schoolsData.geipAF}`, 'DASHBOARD');
-          } else {
-            logger.error('Schools API returned error', 'DASHBOARD', new Error(data.error || 'Unknown error'));
-            setTotalSchools(0);
-            setTargetSchools(0);
-            setNotTargetSchools(0);
-            setGeipSchools(0);
-            setGeipAFSchools(0);
+            logger.info(`Schools count fetched: Total=${schoolsData.total}`, 'DASHBOARD');
+          }
+          resultIndex++;
+        }
+
+        // Process students
+        if (cachedStudents !== null && cachedStudents !== undefined) {
+          setTotalStudents(cachedStudents);
+          logger.info(`Using cached total students count: ${cachedStudents.toLocaleString()}`, 'DASHBOARD');
+        } else if (studentsPromise) {
+          const studentsResult = results[resultIndex];
+          if (studentsResult?.status === 'fulfilled') {
+            const studentsCount = studentsResult.value;
+            setTotalStudents(studentsCount);
+            logger.info(`Total students count: ${studentsCount.toLocaleString()}`, 'DASHBOARD');
           }
         }
+
+        setLoading(false);
       } catch (error: any) {
         if (isMounted && error?.name !== 'AbortError') {
-          logger.error('Failed to fetch schools count', 'DASHBOARD', error);
+          logger.error('Failed to load dashboard data', 'DASHBOARD', error);
           setTotalSchools(0);
           setTargetSchools(0);
           setNotTargetSchools(0);
           setGeipSchools(0);
           setGeipAFSchools(0);
+          setTotalStudents(0);
         }
+        setLoading(false);
       }
     };
 
-    fetchSchoolsCount();
+    fetchAllDashboardData();
 
     return () => {
       isMounted = false;
@@ -199,94 +233,12 @@ export default function DashboardPage() {
     };
   }, [mounted, refreshKey]);
 
-  // Fetch total students count from dedicated dashboard API
-  // COMPLETELY SEPARATE from Students page logic - no shared state, filters, or pagination
-  // Uses ONLY response.count, NEVER results.length
-  // Fetches with limit=1 for performance
-  // StatCard is independent - does NOT depend on Students page filters or pagination
-  useEffect(() => {
-    if (!mounted) return;
-    
-    const controller = new AbortController();
-    let isMounted = true;
-
-    const fetchTotalStudents = async () => {
-      try {
-        const token = getToken();
-        if (!token) {
-          logger.warn('No token available for students count fetch', 'DASHBOARD');
-          return;
-        }
-
-        // Check cache first
-        const cacheKey = 'dashboard:total_students_count';
-        const cached = dataCache.get<number>(cacheKey);
-        if (cached !== null && cached !== undefined) {
-          if (isMounted && !controller.signal.aborted) {
-            setTotalStudents(cached);
-            logger.info(`Using cached total students count: ${cached.toLocaleString()}`, 'DASHBOARD');
-          }
-          return;
-        }
-
-        // Call dedicated dashboard API endpoint (completely separate from Students page)
-        // This endpoint:
-        // - Uses flat /students/ endpoint with limit=1 to get GLOBAL total count
-        // - Returns ONLY response.count (never results.length)
-        // - Does NOT depend on Students page filters or pagination
-        // - Is independent of any user selections or filters
-        // - Gets system-wide total (542,025+ students across all provinces)
-        const response = await fetch(`/api/dashboard/students/count`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (isMounted && !controller.signal.aborted) {
-          if (data.success && data.count !== undefined) {
-            // STRICT: Use ONLY response.count from dashboard API, NEVER results.length
-            // The dashboard API returns only the count field, not the data array
-            // This count is independent of Students page filters, pagination, or state
-            const total = data.count || 0;
-            setTotalStudents(total);
-            // Cache for 30 minutes
-            dataCache.set(cacheKey, total, 30 * 60 * 1000);
-            logger.info(`Total students count: ${total.toLocaleString()} (from dashboard API response.count with limit=1, NOT results.length, independent of Students page)`, 'DASHBOARD');
-          } else {
-            logger.warn('Dashboard API did not return count field', 'DASHBOARD');
-            setTotalStudents(0);
-          }
-        }
-      } catch (error: any) {
-        if (isMounted && error?.name !== 'AbortError') {
-          logger.error('Failed to fetch total students count from dashboard API', 'DASHBOARD', error);
-          setTotalStudents(0);
-        }
-      }
-    };
-
-    fetchTotalStudents();
-
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [mounted, refreshKey]); // Only depends on mount state and refresh key, NOT on Students page state
-
   // Handler for refresh button
   const handleRefresh = () => {
     // Clear cache first
     dataCache.delete(CACHE_KEYS.SCHOOLS_COUNT);
     dataCache.delete('dashboard:total_students_count');
-    // Trigger re-fetch
+    // Trigger re-fetch with force refresh
     setRefreshKey(prev => prev + 1);
   };
 
@@ -359,23 +311,6 @@ export default function DashboardPage() {
     [t]
   );
 
-  // Calculate derived statistics (limit data processing for performance)
-  const MAX_STATS_ITEMS = 1000; // Only process first 1000 items for stats
-  
-  const limitedProducts = useMemo(() => {
-    return products.slice(0, MAX_STATS_ITEMS);
-  }, [products]);
-
-  const averagePrice = useMemo(() => {
-    if (limitedProducts.length === 0) return 0;
-    const total = limitedProducts.reduce((sum, p) => sum + p.price, 0);
-    return total / limitedProducts.length;
-  }, [limitedProducts]);
-
-  const inStockCount = useMemo(
-    () => limitedProducts.filter((p) => p.stock > 0).length,
-    [limitedProducts]
-  );
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
@@ -423,34 +358,6 @@ export default function DashboardPage() {
           icon={School}
           trend={{ value: 4, isPositive: true }}
         />
-        <StatCard
-          title={t.dashboard.totalUsers}
-          value={users.length}
-          description={t.dashboard.activeUsersFrom}
-          icon={Users}
-          trend={{ value: 12, isPositive: true }}
-        />
-        <StatCard
-          title={t.dashboard.totalProducts}
-          value={products.length}
-          description={t.dashboard.productsInInventory}
-          icon={Package}
-          trend={{ value: 5, isPositive: true }}
-        />
-        <StatCard
-          title={t.dashboard.averagePrice}
-          value={`$${averagePrice.toFixed(2)}`}
-          description={t.dashboard.averageProductPrice}
-          icon={DollarSign}
-          trend={{ value: 8, isPositive: true }}
-        />
-        <StatCard
-          title={t.dashboard.inStock}
-          value={inStockCount}
-          description={t.dashboard.availableProducts}
-          icon={TrendingUp}
-          trend={{ value: 4, isPositive: true }}
-        />
       </div>
       
 
@@ -464,24 +371,6 @@ export default function DashboardPage() {
         monthNames={monthNames}
         availableYears={AVAILABLE_YEARS}
         mounted={mounted}
-        translations={{
-          day: t.dashboard.day,
-          month: t.dashboard.month,
-          year: t.dashboard.year,
-        }}
-      />
-
-      {/* Products Chart */}
-      <ChartSection
-        title={t.dashboard.products}
-        granularity={productsGran}
-        year={productsYear}
-        onGranularityChange={setProductsGran}
-        onYearChange={setProductsYear}
-        monthNames={monthNames}
-        availableYears={AVAILABLE_YEARS}
-        mounted={mounted}
-        color="#ed932b"
         translations={{
           day: t.dashboard.day,
           month: t.dashboard.month,

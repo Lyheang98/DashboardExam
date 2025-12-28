@@ -18,27 +18,19 @@ export interface Translations {
   sidebar: {
     dashboard: string;
     users: string;
-    products: string;
     schools: string;
     settings: string;
   };
   // Dashboard Page
   dashboard: {
     totalUsers: string;
-    totalProducts: string;
-    averagePrice: string;
-    inStock: string;
     schools: string;
     student: string;
     districts: string;
     subjects: string;
     users: string;
-    products: string;
     loading: string;
     activeUsersFrom: string;
-    productsInInventory: string;
-    averageProductPrice: string;
-    availableProducts: string;
     day: string;
     month: string;
     year: string;
@@ -109,37 +101,6 @@ export interface Translations {
     pleaseWaitUsers: string;
     saveChanges: string;
     createUserButton: string;
-  };
-  // Products Page
-  products: {
-    title: string;
-    subtitle: string;
-    searchByName: string;
-    searchPlaceholder: string;
-    filterByCategory: string;
-    allCategories: string;
-    minPrice: string;
-    maxPrice: string;
-    addProduct: string;
-    editProduct: string;
-    createProduct: string;
-    updateProduct: string;
-    price: string;
-    category: string;
-    stock: string;
-    available: string;
-    outOfStock: string;
-    electronics: string;
-    clothing: string;
-    furniture: string;
-    beauty: string;
-    groceries: string;
-    homeDecoration: string;
-    loadingProducts: string;
-    pleaseWaitProducts: string;
-    productName: string;
-    saveChanges: string;
-    createProductButton: string;
   };
   // Settings Page
   settings: {
@@ -244,26 +205,18 @@ export const translations: Record<Language, Translations> = {
     sidebar: {
       dashboard: 'Dashboard',
       users: 'Users Account and Right',
-      products: 'Products',
       schools: 'Schools',
       settings: 'Settings',
     },
     dashboard: {
       totalUsers: 'Total Users',
-      totalProducts: 'Total Products',
-      averagePrice: 'Average Price',
-      inStock: 'In Stock',
       schools: 'Schools',
       student: 'Student',
       districts: 'Districts',
       subjects: 'Subjects',
       users: 'Users',
-      products: 'Products',
       loading: 'Loading...',
       activeUsersFrom: 'Active users from DummyJSON',
-      productsInInventory: 'Products in inventory',
-      averageProductPrice: 'Average product price',
-      availableProducts: 'Available products',
       day: 'Day',
       month: 'Month',
       year: 'Year',
@@ -332,36 +285,6 @@ export const translations: Record<Language, Translations> = {
       pleaseWaitUsers: 'Please wait while we fetch your users...',
       saveChanges: 'Save Changes',
       createUserButton: 'Create User',
-    },
-    products: {
-      title: 'Products',
-      subtitle: 'View and manage your product health.',
-      searchByName: 'Search by product name',
-      searchPlaceholder: 'Type product name...',
-      filterByCategory: 'Filter by Category',
-      allCategories: 'All Categories',
-      minPrice: 'Min Price ($)',
-      maxPrice: 'Max Price ($)',
-      addProduct: 'Add Product',
-      editProduct: 'Edit Product',
-      createProduct: 'Create a new product',
-      updateProduct: 'Update product details',
-      price: 'Price',
-      category: 'Category',
-      stock: 'Stock',
-      available: 'Available',
-      outOfStock: 'Out of Stock',
-      electronics: 'Electronics',
-      clothing: 'Clothing',
-      furniture: 'Furniture',
-      beauty: 'Beauty',
-      groceries: 'Groceries',
-      homeDecoration: 'Home Decoration',
-      loadingProducts: 'Loading Products',
-      pleaseWaitProducts: 'Please wait while we fetch your products...',
-      productName: 'Product Name',
-      saveChanges: 'Save Changes',
-      createProductButton: 'Create Product',
     },
     settings: {
       title: 'Settings',
@@ -461,26 +384,18 @@ export const translations: Record<Language, Translations> = {
     sidebar: {
       dashboard: 'ផ្ទាំងគ្រប់គ្រង',
       users: 'គណនីអ្នកប្រើប្រាស់ និងសិទ្ធិ',
-      products: 'ផលិតផល',
       schools: 'សាលា',
       settings: 'ការកំណត់',
     },
     dashboard: {
       totalUsers: 'អ្នកប្រើប្រាស់សរុប',
-      totalProducts: 'ផលិតផលសរុប',
-      averagePrice: 'តម្លៃមធ្យម',
-      inStock: 'មានក្នុងស្តុក',
       schools: 'សាលា',
       student: 'សិស្ស',
       districts: 'ស្រុក',
       subjects: 'មុខវិជ្ជា',
       users: 'អ្នកប្រើប្រាស់',
-      products: 'ផលិតផល',
       loading: 'កំពុងផ្ទុក...',
       activeUsersFrom: 'អ្នកប្រើប្រាស់សកម្មពី DummyJSON',
-      productsInInventory: 'ផលិតផលក្នុងស្តុក',
-      averageProductPrice: 'តម្លៃផលិតផលមធ្យម',
-      availableProducts: 'ផលិតផលដែលមាន',
       day: 'ថ្ងៃ',
       month: 'ខែ',
       year: 'ឆ្នាំ',
@@ -549,36 +464,6 @@ export const translations: Record<Language, Translations> = {
       pleaseWaitUsers: 'សូមរង់ចាំខណៈដែលយើងកំពុងទាញយកអ្នកប្រើប្រាស់របស់អ្នក...',
       saveChanges: 'រក្សាទុកការផ្លាស់ប្តូរ',
       createUserButton: 'បង្កើតអ្នកប្រើប្រាស់',
-    },
-    products: {
-      title: 'ផលិតផល',
-      subtitle: 'មើល និងគ្រប់គ្រងសុខភាពផលិតផលរបស់អ្នក។',
-      searchByName: 'ស្វែងរកតាមឈ្មោះផលិតផល',
-      searchPlaceholder: 'វាយឈ្មោះផលិតផល...',
-      filterByCategory: 'តម្រងតាមប្រភេទ',
-      allCategories: 'ប្រភេទទាំងអស់',
-      minPrice: 'តម្លៃអប្បបរមា ($)',
-      maxPrice: 'តម្លៃអតិបរមា ($)',
-      addProduct: 'បន្ថែមផលិតផល',
-      editProduct: 'កែប្រែផលិតផល',
-      createProduct: 'បង្កើតផលិតផលថ្មី',
-      updateProduct: 'ធ្វើបច្ចុប្បន្នភាពព័ត៌មានផលិតផល',
-      price: 'តម្លៃ',
-      category: 'ប្រភេទ',
-      stock: 'ស្តុក',
-      available: 'មាន',
-      outOfStock: 'អស់ស្តុក',
-      electronics: 'អេឡិចត្រូនិច',
-      clothing: 'សម្លៀកបំពាក់',
-      furniture: 'គ្រឿងសង្ហារឹម',
-      beauty: 'សម្រស់',
-      groceries: 'គ្រឿងទេស',
-      homeDecoration: 'ការតុបតែងផ្ទះ',
-      loadingProducts: 'កំពុងផ្ទុកផលិតផល',
-      pleaseWaitProducts: 'សូមរង់ចាំខណៈដែលយើងកំពុងទាញយកផលិតផលរបស់អ្នក...',
-      productName: 'ឈ្មោះផលិតផល',
-      saveChanges: 'រក្សាទុកការផ្លាស់ប្តូរ',
-      createProductButton: 'បង្កើតផលិតផល',
     },
     settings: {
       title: 'ការកំណត់',

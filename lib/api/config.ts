@@ -37,14 +37,6 @@ export const EXTERNAL_ENDPOINTS = {
     UPDATE: (id: string | number) => `${EXTERNAL_API_BASE}/api/users/${id}/`,
     DELETE: (id: string | number) => `${EXTERNAL_API_BASE}/api/users/${id}/`,
   },
-  PRODUCTS: {
-    BASE: getEnv('EXTERNAL_API_PRODUCTS_URL', `${EXTERNAL_API_BASE}/api/products/`),
-    LIST: getEnv('EXTERNAL_API_PRODUCTS_URL', `${EXTERNAL_API_BASE}/api/products/`),
-    SEARCH: `${EXTERNAL_API_BASE}/api/products/search/`,
-    DETAIL: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
-    UPDATE: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
-    DELETE: (id: string | number) => `${EXTERNAL_API_BASE}/api/products/${id}/`,
-  },
   PROVINCES: {
     BASE: getEnv('EXTERNAL_API_PROVINCES_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/province/`),
     LIST: getEnv('EXTERNAL_API_PROVINCES_URL', `${EXTERNAL_API_BASE}/api/Base/data/v1/api/lookup/v1/province/`),
@@ -95,14 +87,6 @@ export const INTERNAL_ENDPOINTS = {
     CREATE: `${INTERNAL_API_BASE}/users`,
     UPDATE: (id: string | number) => `${INTERNAL_API_BASE}/users/${id}`,
     DELETE: (id: string | number) => `${INTERNAL_API_BASE}/users/${id}`,
-  },
-  PRODUCTS: {
-    BASE: `${INTERNAL_API_BASE}/products`,
-    SEARCH: `${INTERNAL_API_BASE}/products/search`,
-    DETAIL: (id: string | number) => `${INTERNAL_API_BASE}/products/${id}`,
-    CREATE: `${INTERNAL_API_BASE}/products`,
-    UPDATE: (id: string | number) => `${INTERNAL_API_BASE}/products/${id}`,
-    DELETE: (id: string | number) => `${INTERNAL_API_BASE}/products/${id}`,
   },
   SCHOOLS: {
     BASE: `${INTERNAL_API_BASE}/schools`,

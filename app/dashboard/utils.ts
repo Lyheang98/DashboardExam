@@ -4,7 +4,7 @@
  * Helper functions for dashboard data processing and chart generation
  */
 
-import { ChartDataPoint, Granularity, DashboardUser, DashboardProduct } from './types';
+import { ChartDataPoint, Granularity, DashboardUser } from './types';
 import { logger } from '@/lib/logger';
 
 /**
@@ -98,59 +98,31 @@ export function formatUserData(user: {
 }
 
 /**
- * Formats external API product data to DashboardProduct format
- * @param product - Raw product data from API
- * @returns Formatted DashboardProduct object
- */
-export function formatProductData(product: {
-  id: number;
-  title: string;
-  price: number;
-  category: string;
-  stock: number;
-}): DashboardProduct {
-  return {
-    id: product.id,
-    name: product.title,
-    price: product.price,
-    category: product.category,
-    stock: product.stock,
-    status: product.stock > 0 ? 'Available' : 'Out of Stock',
-  };
-}
-
-/**
  * Fetches dashboard data from external APIs
  * @param signal - Optional AbortSignal for request cancellation
- * @returns Promise resolving to users and products arrays
+ * @returns Promise resolving to users array
  */
 export async function fetchDashboardData(signal?: AbortSignal): Promise<{
   users: DashboardUser[];
-  products: DashboardProduct[];
 }> {
   try {
-    const [usersRes, productsRes] = await Promise.all([
-      fetch('https://dummyjson.com/users?limit=10', { signal }),
-      fetch('https://dummyjson.com/products?limit=10', { signal }),
-    ]);
+    const usersRes = await fetch('https://dummyjson.com/users?limit=10', { signal });
 
-    if (!usersRes.ok || !productsRes.ok) {
+    if (!usersRes.ok) {
       throw new Error('Failed to fetch dashboard data');
     }
 
     const usersData = await usersRes.json();
-    const productsData = await productsRes.json();
 
     const users: DashboardUser[] = (usersData.users || []).map(formatUserData);
-    const products: DashboardProduct[] = (productsData.products || []).map(formatProductData);
 
-    return { users, products };
+    return { users };
   } catch (error: any) {
     // Don't log error if request was aborted
     if (error?.name !== 'AbortError') {
       logger.error('Failed to fetch dashboard data', 'DASHBOARD', error);
     }
-    return { users: [], products: [] };
+    return { users: [] };
   }
 }
 

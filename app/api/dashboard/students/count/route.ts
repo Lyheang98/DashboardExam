@@ -66,11 +66,17 @@ export async function GET(request: NextRequest) {
 
     logger.info(`[DASHBOARD] Students count: ${count.toLocaleString()} (from API response.count with limit=1, NOT results.length)`, 'API/DASHBOARD');
 
-    return NextResponse.json({
+    // Add cache headers for better performance (30 minutes)
+    const nextResponse = NextResponse.json({
       success: true,
       count: count, // ONLY return count, never results.length
       // Do NOT return data or results array
     });
+    
+    // Cache response for 30 minutes (client-side caching)
+    nextResponse.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600');
+    
+    return nextResponse;
   } catch (error: any) {
     logger.error(`[DASHBOARD] Students count API error: ${error.message}`, 'API/DASHBOARD', error);
     return NextResponse.json(

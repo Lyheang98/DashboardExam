@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    // Add cache headers for better performance (5 minutes)
+    const response = NextResponse.json({
       success: true,
       total: result.total,
       target: result.target,
@@ -33,6 +34,11 @@ export async function GET(request: NextRequest) {
       geipSchool: result.geipSchool,
       geipAF: result.geipAF,
     });
+    
+    // Cache response for 5 minutes (client-side caching)
+    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    
+    return response;
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to fetch schools' },

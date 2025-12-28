@@ -96,9 +96,20 @@ export async function fetchSchools(
       offset: 0,
     });
 
+    // Ensure data is in the correct format (SchoolData[])
+    const schoolData = result.data || [];
+    const formattedData = Array.isArray(schoolData) 
+      ? schoolData.map((school: any) => ({
+          province_id: school.province_id || '',
+          district_name: school.district_name || '',
+          school_name: school.school_name || '',
+          total_count: school.total_count || 0,
+        }))
+      : [];
+
     return {
       success: result.success,
-      data: result.data || [],
+      data: formattedData,
       count: result.count || 0,
       total_students: result.total_students || 0,
       error: result.error,
