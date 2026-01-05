@@ -295,6 +295,12 @@ export async function apiRequest<T = any>(
         }
       }
       
+      // Handle rate limiting (429) - NO automatic retry per architecture rules
+      if (response.status === 429) {
+        logger.warn(`Rate limited (429) for ${endpoint} - no automatic retry`, 'API');
+        return { success: false, error: 'Rate limited. Please try again later.' };
+      }
+      
       // Check if this is a token expiration error (401)
       // IMPORTANT: Check BEFORE logging error to prevent duplicate logs
       const isExpired = isTokenExpiredError(response.status, errorData);
@@ -357,9 +363,7 @@ export async function apiRequest<T = any>(
         logger.error(`Error response data: ${JSON.stringify(errorData).substring(0, 500)}`, 'API');
       }
       
-      logger.error(`API failed: ${endpoint}`, 'API', new Error(`Status: ${response.status}, Error: ${errorMsg}`));
-      logger.error(`Error response data: ${JSON.stringify(errorData).substring(0, 500)}`, 'API');
-      return { success: false, error: errorMsg || 'Request failed' };
+      return { success: false, error: `Status: ${response.status}, Error: ${errorMsg || 'Request failed'}` };
     }
 
     return { success: true, data: data as T };

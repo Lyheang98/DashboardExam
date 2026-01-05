@@ -82,6 +82,25 @@ class DataCache {
   has(key: string): boolean {
     return this.get(key) !== null;
   }
+
+  /**
+   * Clear cache entries matching a pattern (useful for clearing related caches)
+   */
+  clearPattern(pattern: string): void {
+    const regex = new RegExp(pattern);
+    for (const key of this.cache.keys()) {
+      if (regex.test(key)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Get all cache keys (for debugging)
+   */
+  getKeys(): string[] {
+    return Array.from(this.cache.keys());
+  }
 }
 
 // Singleton instance

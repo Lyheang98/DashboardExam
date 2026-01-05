@@ -14,6 +14,6 @@ export interface LanguageOption {
 
 export const AVAILABLE_LANGUAGES: ReadonlyArray<LanguageOption> = [
   { code: 'en', name: 'English', nativeName: 'English' },
-  { code: 'km', name: 'Khmer', nativeName: 'ភាសាខ្មែរ' },
+  { code: 'km', name: 'Kantumruy', nativeName: 'ភាសាខ្មែរ' },
 ] as const;
 

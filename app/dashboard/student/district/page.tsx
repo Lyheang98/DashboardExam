@@ -17,6 +17,7 @@ import { DataTable, DataTableColumn } from '@/components/dashboard/DataTable';
 import { logger } from '@/lib/logger';
 import { useFilterState } from '@/lib/filters';
 import { districtService, provinceService } from '@/lib/api';
+import { dataCache } from '@/lib/cache/dataCache';
 
 interface DistrictData {
   province_id: string;
@@ -25,13 +26,14 @@ interface DistrictData {
 }
 
 /**
- * DISTRICT PAGE - Matches Students page behavior
+ * DISTRICT PAGE - Province-dependent district list
  * 
  * Requirements:
- * - Requires: provinceId ONLY
- * - Auto-fetches when province is selected (no button click needed)
- * - Shows empty state before province selection
- * - Uses client-side pagination after fetching all districts
+ * - Districts must NOT load by default
+ * - Staff must select a province first before any district data is fetched
+ * - District API should be called only when provinceId is selected
+ * - No fallback or aggregation across provinces
+ * - If no province is selected, show empty state
  */
 export default function DistrictPage() {
   const { t, language } = useLanguage();
@@ -49,11 +51,10 @@ export default function DistrictPage() {
   // ============================================
   // STATE: Data & UI
   // ============================================
-  const [allDistricts, setAllDistricts] = useState<DistrictData[]>([]); // All district summaries fetched once
+  const [allDistricts, setAllDistricts] = useState<DistrictData[]>([]); // District summaries for selected province
   const [totalCount, setTotalCount] = useState<number>(0); // Total count from API
   const [loading, setLoading] = useState(false);
   const [provinces, setProvinces] = useState<Array<{ province_id: string; province_name: string }>>([]);
-  const [provinceDistrictCounts, setProvinceDistrictCounts] = useState<Map<string, number>>(new Map());
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [searchQuery, setSearchQueryLocal] = useState('');
@@ -66,6 +67,7 @@ export default function DistrictPage() {
   // ============================================
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const previousProvinceIdRef = useRef<string | null>(null);
 
   // ============================================
   // MOUNT: Initialize component
@@ -144,8 +146,37 @@ export default function DistrictPage() {
   }, []);
 
   // ============================================
-  // INITIAL FETCH: Fetch districts ONCE on mount (no filters)
-  // CRITICAL: Fetch all districts once, then filter client-side
+  // NORMALIZE API RESPONSE: Handle different response shapes
+  // ============================================
+  const normalizeDistrictResponse = useCallback((response: any): DistrictData[] => {
+    // Handle different response shapes
+    if (Array.isArray(response)) {
+      // Response is directly an array
+      return response;
+    }
+    
+    if (response && typeof response === 'object') {
+      // Response is an object, check for different property names
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      if (Array.isArray(response.results)) {
+        return response.results;
+      }
+      
+      // Check if the response itself is a district object
+      if (response.province_id && response.district_name) {
+        return [response];
+      }
+    }
+    
+    // Default to empty array if no valid data found
+    return [];
+  }, []);
+
+  // ============================================
+  // DATA FETCHING: Fetch districts ONLY when province is selected
   // ============================================
   useEffect(() => {
     // Only fetch after component is mounted
@@ -153,75 +184,117 @@ export default function DistrictPage() {
       return;
     }
 
-    // Skip if already fetched
-    if (hasInitialFetch) {
+    // Get current province ID
+    const currentProvinceId = filters.provinceId?.trim() || '';
+    
+    // If no province is selected, clear districts and return
+    if (!currentProvinceId) {
+      setAllDistricts([]);
+      setTotalCount(0);
+      setHasInitialFetch(false);
+      setLoading(false);
+      previousProvinceIdRef.current = null;
       return;
     }
 
-    // Cancel previous request if still pending
+    // If the same province is already selected, don't refetch
+    if (previousProvinceIdRef.current === currentProvinceId) {
+      return;
+    }
+
+    // Update the previous province ID ref
+    previousProvinceIdRef.current = currentProvinceId;
+
+    // Cancel any ongoing request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
+    // Create a new abort controller
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     setLoading(true);
 
-    const fetchAllDistricts = async () => {
+    const fetchDistricts = async () => {
       try {
-        // Use DistrictService to fetch all districts
-        logger.info(`[DISTRICT] Fetching all districts (no filters)`, 'FILTERS');
+        // Check cache first
+        const cacheKey = `districts:${currentProvinceId}`;
+        const cachedDistricts = dataCache.get<DistrictData[]>(cacheKey);
+        
+        // Only use cache if it contains valid data (not empty)
+        if (cachedDistricts && Array.isArray(cachedDistricts) && cachedDistricts.length > 0) {
+          logger.info(`[DISTRICT] Using cached districts for province: ${currentProvinceId} (${cachedDistricts.length} districts)`, 'DISTRICT');
+          setAllDistricts(cachedDistricts);
+          setTotalCount(cachedDistricts.length);
+          setHasInitialFetch(true);
+          setLoading(false);
+          setPage(1); // Reset to first page when province changes
+          return;
+        }
+        
+        // Fetch districts for the selected province
+        logger.info(`[DISTRICT] Fetching districts for province: ${currentProvinceId}`, 'DISTRICT');
         
         const result = await districtService.getAll({
+          province_id: currentProvinceId,
           limit: 10000,
           offset: 0,
         });
 
+        // Check if request was aborted
         if (abortController.signal.aborted) {
           return;
         }
 
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to fetch districts');
-        }
-
-        const allDistrictsData = result.data || [];
+        // Normalize the response to handle different shapes
+        const normalizedDistricts = normalizeDistrictResponse(result);
         
-        logger.info(`[DISTRICT] Fetched ${allDistrictsData.length} districts (API count: ${result.count || 0})`, 'FILTERS');
-
-        // Check if we have valid data
-        if (!Array.isArray(allDistrictsData) || allDistrictsData.length === 0) {
-          logger.warn(`[DISTRICT] No districts returned from service`, 'FILTERS');
+        if (!result.success) {
+          logger.error(`[DISTRICT] District API failed: ${result.error}`, 'DISTRICT');
           setAllDistricts([]);
           setTotalCount(0);
           setHasInitialFetch(true);
-          setProvinceDistrictCounts(new Map());
+          setLoading(false);
           return;
         }
 
-        setAllDistricts(allDistrictsData);
-        setTotalCount(result.count || allDistrictsData.length);
-        setHasInitialFetch(true);
-        
-        // Calculate district counts per province for dropdown display
-        const countsMap = new Map<string, number>();
-        allDistrictsData.forEach((district: DistrictData) => {
-          const provinceId = (district.province_id || '').trim();
-          if (provinceId && provinceId !== 'string' && provinceId !== 'null' && provinceId.length > 0) {
-            countsMap.set(provinceId, (countsMap.get(provinceId) || 0) + 1);
-          }
-        });
-        setProvinceDistrictCounts(countsMap);
-        
-        logger.info(`[DISTRICT] Calculated district counts for ${countsMap.size} provinces`, 'FILTERS');
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          return; // Request was cancelled, ignore
+        logger.info(`[DISTRICT] Fetched ${normalizedDistricts.length} districts for province ${currentProvinceId}`, 'DISTRICT');
+
+        // Check if we have valid data
+        if (!Array.isArray(normalizedDistricts)) {
+          logger.warn(`[DISTRICT] Invalid districts data returned from service`, 'DISTRICT');
+          setAllDistricts([]);
+          setTotalCount(0);
+          setHasInitialFetch(true);
+          setLoading(false);
+          return;
         }
-        logger.error('[DISTRICT] Failed to fetch districts', 'FILTERS', error);
+
+        // Only cache if we have valid data (not empty)
+        if (normalizedDistricts.length > 0) {
+          // Cache district results (30 minutes TTL)
+          dataCache.set(cacheKey, normalizedDistricts, 30 * 60 * 1000);
+          logger.info(`[DISTRICT] Cached ${normalizedDistricts.length} districts for province ${currentProvinceId}`, 'DISTRICT');
+        }
+
+        setAllDistricts(normalizedDistricts);
+        setTotalCount(normalizedDistricts.length);
+        setHasInitialFetch(true);
+        setPage(1); // Reset to first page when province changes
+        
+        logger.info(`[DISTRICT] Loaded ${normalizedDistricts.length} districts for province ${currentProvinceId}`, 'DISTRICT');
+      } catch (error: any) {
+        // Ignore abort errors
+        if (error.name === 'AbortError') {
+          return;
+        }
+        
+        logger.error('[DISTRICT] Failed to fetch districts', 'DISTRICT', error);
         setAllDistricts([]);
         setTotalCount(0);
+        setHasInitialFetch(true);
+        setLoading(false);
       } finally {
         if (!abortController.signal.aborted) {
           setLoading(false);
@@ -229,24 +302,21 @@ export default function DistrictPage() {
       }
     };
 
-    fetchAllDistricts();
-  }, [mounted, hasInitialFetch]);
+    fetchDistricts();
 
-
+    // Cleanup function
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [mounted, filters.provinceId, normalizeDistrictResponse]);
 
   // ============================================
   // MEMOIZED COMPUTATIONS: Client-Side Filtering & Pagination
-  // CRITICAL: allDistricts contains ALL districts, filtering and pagination are client-side
   // ============================================
   const filteredDistricts = useMemo(() => {
     let filtered = [...allDistricts];
-    
-    // Apply province filter (if selected)
-    if (filters.provinceId) {
-      filtered = filtered.filter(district => 
-        district.province_id === filters.provinceId
-      );
-    }
     
     // Apply client-side search filter
     if (debouncedSearch && debouncedSearch.trim()) {
@@ -257,7 +327,7 @@ export default function DistrictPage() {
     }
     
     return filtered;
-  }, [allDistricts, filters.provinceId, debouncedSearch]);
+  }, [allDistricts, debouncedSearch]);
 
   // Client-side pagination
   const paginatedDistricts = useMemo(() => {
@@ -298,11 +368,16 @@ export default function DistrictPage() {
   // Show empty state when:
   // - Not loading
   // - No districts data after filtering
-  const showEmptyState = !loading && filteredDistricts.length === 0 && hasInitialFetch;
+  // - We've attempted to fetch (hasInitialFetch is true) OR no province is selected
+  const showEmptyState = !loading && filteredDistricts.length === 0 && (hasInitialFetch || !filters.provinceId);
   
-  // Show "No districts found" when:
-  // - Empty state is true and we've attempted to fetch
-  const showNoDataFound = showEmptyState;
+  // Show "No districts found for this province" when:
+  // - Empty state is true and we've attempted to fetch (hasInitialFetch is true)
+  const showNoDataFound = showEmptyState && hasInitialFetch;
+  
+  // Show "Please select a province to view districts" when:
+  // - Empty state is true and no province is selected
+  const showSelectProvince = showEmptyState && !filters.provinceId;
 
   return (
     <div className="w-full space-y-6">
@@ -332,7 +407,7 @@ export default function DistrictPage() {
     sm:grid-cols-2
     lg:grid-cols-2"
           >
-            {/* Province Filter */}
+            {/* Province Filter - Required */}
             <div className="space-y-2">
               <Label
                 htmlFor="province-filter"
@@ -343,20 +418,20 @@ export default function DistrictPage() {
               <select
                 id="province-filter"
                 value={filters.provinceId || 'all'}
-                onChange={(e) => setProvinceId(e.target.value === 'all' ? '' : e.target.value)}
+                onChange={(e) => {
+                  setProvinceId(e.target.value === 'all' ? '' : e.target.value);
+                  setPage(1); // Reset pagination when filter changes
+                }}
                 className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
               >
                 <option value="all" className="font-khmer">
-                  {language === 'km' ? 'ខេត្តទាំងអស់' : 'All Provinces'}
+                  {language === 'km' ? 'សូមជ្រើសរើសខេត្ត' : 'Select Province'}
                 </option>
-                {provinces.map((province) => {
-                  const districtCount = provinceDistrictCounts.get(province.province_id) || 0;
-                  return (
-                    <option key={province.province_id} value={province.province_id} className="font-khmer">
-                      {province.province_name} {districtCount > 0 ? `(${districtCount})` : ''}
-                    </option>
-                  );
-                })}
+                {provinces.map((province) => (
+                  <option key={province.province_id} value={province.province_id} className="font-khmer">
+                    {province.province_name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -373,6 +448,7 @@ export default function DistrictPage() {
                   placeholder={language === 'km' ? 'ស្វែងរកតាមឈ្មោះស្រុក...' : 'Search by district name...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQueryLocal(e.target.value)}
+                  disabled={!filters.provinceId}
                   className={`w-full ${language === 'km' ? 'font-khmer' : ''}`}
                 />
             </div>
@@ -463,10 +539,16 @@ export default function DistrictPage() {
                 </div>
               </div>
             </>
+          ) : showSelectProvince ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <p className={language === 'km' ? 'font-khmer' : ''}>
+                {language === 'km' ? 'សូមជ្រើសរើសខេត្តដើម្បីមើលស្រុក' : 'Please select a province to view districts'}
+              </p>
+            </div>
           ) : showNoDataFound ? (
             <div className="text-center py-12 text-muted-foreground">
               <p className={language === 'km' ? 'font-khmer' : ''}>
-                {language === 'km' ? 'រកមិនឃើញស្រុក' : 'No districts found'}
+                {language === 'km' ? 'រកមិនឃើញស្រុកសម្រាប់ខេត្តនេះ' : 'No districts found for this province'}
               </p>
             </div>
           ) : null}
@@ -474,4 +556,3 @@ export default function DistrictPage() {
     </div>
   );
 }
-

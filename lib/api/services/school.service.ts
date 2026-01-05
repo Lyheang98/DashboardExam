@@ -281,12 +281,18 @@ export const schoolService = {
       let url = EXTERNAL_ENDPOINTS.SCHOOLS.LIST;
       const queryParams = new URLSearchParams();
       
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
+      // Always specify a limit - external API defaults to 20 if not provided
+      // Use provided limit or default to 2000 for better performance
+      const limit = params?.limit || 2000;
+      queryParams.append('limit', limit.toString());
+      
       if (params?.offset) queryParams.append('offset', params.offset.toString());
       
       if (queryParams.toString()) {
         url = `${url}?${queryParams.toString()}`;
       }
+      
+      logger.info(`[SCHOOL_SERVICE] Fetching schools from ${url} with limit=${limit}`, 'SCHOOL_SERVICE');
 
       const response = await apiClient.get(url, { token });
 
@@ -336,195 +342,120 @@ export const schoolService = {
 
   /**
    * Search schools with filters (for School page)
-   * Fetches all schools and applies client-side filtering
+   * REQUIRES province_id and district_name filters
+   * Uses small pagination (≤50) - NO batch fetching
+   * Makes ONE request per call - NO loops, NO retries
    */
   async search(token: string, params: SchoolSearchParams): Promise<SchoolServiceResponse> {
     try {
-      const cacheKey = CACHE_KEYS.SCHOOLS_LIST(
-        JSON.stringify({ q: params.q, province: params.province, district: params.district, school_type: params.school_type, is_target: params.is_target })
-      );
-      const cacheTTL = 30 * 60 * 1000;
-
-      const hasFilters = !!(params.q || params.province || params.district || params.school_type || params.is_target);
-
-      const cached = dataCache.get<School[]>(cacheKey);
-      if (cached) {
-        logger.info(`Using cached schools data: ${cached.length} schools`, 'SCHOOL_SERVICE');
+      // REQUIRED: province_id and district_name must be provided
+      // Convert province/district params to province_id/district_name format
+      const province_id = (params as any).province_id || params.province;
+      const district_name = (params as any).district_name || params.district;
+      
+      if (!province_id || !district_name) {
         return {
-          success: true,
-          data: cached,
-          count: cached.length,
-          next: null,
-          previous: null,
+          success: false,
+          error: 'province_id and district_name are required for school search',
+          data: [],
+          count: 0
         };
       }
 
-      // Fetch ALL schools using optimized parallel pagination
-      const allSchools: School[] = [];
-      let offset = 0;
-      const limit = 2000;
-      const maxConcurrentBatches = 5;
-      let hasMore = true;
-      let totalCount = 0;
+      // Use small pagination (≤25 per architecture rules)
+      const limit = Math.min(params.limit || 25, 25);
+      const offset = params.offset || 0;
 
-      const firstBatchResult = await this.getAllSchools(token, { limit, offset });
+      // Cache key per province+district combination
+      const cacheKey = CACHE_KEYS.SCHOOLS_LIST(`${province_id}:${district_name}:${offset}:${limit}`);
+      const cacheTTL = 30 * 60 * 1000; // 30 minutes
+
+      // Check cache first
+      const cached = dataCache.get<SchoolServiceResponse>(cacheKey);
+      if (cached && cached.success && cached.data) {
+        logger.info(`Using cached schools data for ${province_id}/${district_name}: ${cached.data.length} schools`, 'SCHOOL_SERVICE');
+        return cached;
+      }
+
+      // Make ONE request only - use schools/list API endpoint
+      // Build URL properly using URLSearchParams for correct encoding
+      const queryParams = new URLSearchParams();
+      queryParams.append('province_id', province_id);
+      queryParams.append('district_name', district_name);
+      queryParams.append('limit', limit.toString());
+      queryParams.append('offset', offset.toString());
       
-      if (!firstBatchResult.success) {
-        logger.error(`Failed to fetch first schools batch`, 'SCHOOL_SERVICE', firstBatchResult.error);
-        return { success: false, error: firstBatchResult.error || 'Failed to fetch schools', data: [], count: 0 };
-      }
-
-      totalCount = firstBatchResult.count || 0;
-      const firstBatch = (firstBatchResult.data || []) as School[];
-      if (firstBatch.length > 0) {
-        allSchools.push(...firstBatch);
-        offset += limit;
-        hasMore = firstBatchResult.next !== null && firstBatch.length === limit;
-      }
-
-      while (hasMore && allSchools.length < totalCount) {
-        const batchPromises: Promise<any>[] = [];
-        const batchOffsets: number[] = [];
-        
-        for (let i = 0; i < maxConcurrentBatches && offset < totalCount; i++) {
-          const currentOffset = offset + (i * limit);
-          if (currentOffset < totalCount) {
-            batchOffsets.push(currentOffset);
-            batchPromises.push(this.getAllSchools(token, { limit, offset: currentOffset }));
-          }
-        }
-        
-        if (batchPromises.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        const batchResults = await Promise.all(batchPromises);
-        
-        let foundData = false;
-        for (let i = 0; i < batchResults.length; i++) {
-          const batchResult = batchResults[i];
-          const batchOffset = batchOffsets[i];
-          
-          if (!batchResult.success) {
-            logger.warn(`Failed to fetch schools batch at offset ${batchOffset}`, 'SCHOOL_SERVICE', batchResult.error);
-            continue;
-          }
-
-          const batch = (batchResult.data || []) as School[];
-          if (batch.length === 0) {
-            hasMore = false;
-            break;
-          }
-          
-          allSchools.push(...batch);
-          foundData = true;
-        }
-
-        offset += limit * maxConcurrentBatches;
-        
-        const lastBatchData = (batchResults[batchResults.length - 1]?.data || []) as School[];
-        hasMore = foundData && 
-                  lastBatchData.length === limit && 
-                  allSchools.length < totalCount &&
-                  offset < totalCount;
-
-        if (totalCount > 0 && allSchools.length >= totalCount) {
-          hasMore = false;
-        }
-      }
-
-      logger.info(`Fetched ${allSchools.length} schools total (API reported: ${totalCount})`, 'SCHOOL_SERVICE');
-
-      const baseTotalCount = totalCount > 0 ? totalCount : allSchools.length;
-
-      // Apply filters
-      let filteredSchools = allSchools;
-
+      // Include search query if provided
       if (params.q) {
-        const query = params.q.toLowerCase();
-        filteredSchools = filteredSchools.filter((school) => {
-          const name = (school.school_name || '').toLowerCase();
-          return name.includes(query);
-        });
+        queryParams.append('q', params.q);
       }
+      
+      // Use absolute URL for server-side fetch
+      const apiBaseUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const url = `${apiBaseUrl}/api/schools/list?${queryParams.toString()}`;
+      
+      logger.info(`[SCHOOL_SERVICE] Fetching schools: ${url}`, 'SCHOOL_SERVICE');
 
-      if (params.province) {
-        filteredSchools = filteredSchools.filter((school) => {
-          const province = (school.province_name || '').toLowerCase();
-          return province.includes(params.province!.toLowerCase());
-        });
-      }
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      });
 
-      if (params.district) {
-        filteredSchools = filteredSchools.filter((school) => {
-          const district = (school.district_name || '').toLowerCase();
-          return district.includes(params.district!.toLowerCase());
-        });
-      }
-
-      if (params.school_type) {
-        const filterType = params.school_type.trim();
-        filteredSchools = filteredSchools.filter((school) => {
-          const typeH = (school.school_type_h || '').toString();
-          const typeK = (school.school_type_k || '').toString();
-          
-          if (filterType.toLowerCase() === 'geip') {
-            const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
-            if (exactGEIP) {
-              const isAF = typeH.toLowerCase().includes('geip-af') || 
-                          typeK.toLowerCase().includes('geip-af') ||
-                          typeH.toLowerCase().includes('geip af') || 
-                          typeK.toLowerCase().includes('geip af');
-              return !isAF;
-            }
-            return false;
-          }
-          
-          if (filterType.toLowerCase() === 'geip-af' || filterType.toLowerCase() === 'geip af') {
-            return isGEIPAFSchool(school);
-          }
-          
-          const exactMatch = typeH.toLowerCase() === filterType.toLowerCase() || 
-                           typeK.toLowerCase() === filterType.toLowerCase();
-          if (exactMatch) return true;
-          
-          return typeH.toLowerCase().includes(filterType.toLowerCase()) || 
-                 typeK.toLowerCase().includes(filterType.toLowerCase());
-        });
-      }
-
-      if (params.is_target !== undefined && params.is_target !== '') {
-        const isTargetValue = params.is_target === 'true' || params.is_target === '1';
-        const isNonTargetValue = params.is_target === 'false' || params.is_target === '0';
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error(`[SCHOOL_SERVICE] API error ${response.status}: ${errorText}`, 'SCHOOL_SERVICE');
         
-        if (isTargetValue) {
-          filteredSchools = filteredSchools.filter((school) => {
-            return isTargetSchool(school) === true;
-          });
-        } else if (isNonTargetValue) {
-          filteredSchools = filteredSchools.filter((school) => {
-            return isTargetSchool(school) === false;
-          });
+        // NO automatic retries after 429
+        if (response.status === 429) {
+          return {
+            success: false,
+            error: 'Rate limited. Please try again later.',
+            data: [],
+            count: 0
+          };
         }
+        
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${errorText}`,
+          data: [],
+          count: 0
+        };
       }
 
-      const finalCount = hasFilters ? filteredSchools.length : baseTotalCount;
+      const result = await response.json();
 
-      if (!hasFilters) {
-        dataCache.set(cacheKey, filteredSchools, cacheTTL);
-        logger.info(`Cached ${filteredSchools.length} schools for future requests`, 'SCHOOL_SERVICE');
-      } else {
-        dataCache.set(cacheKey, filteredSchools, cacheTTL);
+      if (!result.success) {
+        logger.error(`[SCHOOL_SERVICE] API returned error: ${result.error}`, 'SCHOOL_SERVICE');
+        return {
+          success: false,
+          error: result.error || 'Failed to fetch schools',
+          data: [],
+          count: 0
+        };
       }
 
-      return { 
-        success: true, 
-        data: filteredSchools, 
-        count: finalCount,
-        next: null,
-        previous: null 
+      const schools = (result.data || []) as School[];
+      const count = result.count || schools.length;
+      const next = result.next || null;
+      const previous = result.previous || null;
+
+      const responseData: SchoolServiceResponse = {
+        success: true,
+        data: schools,
+        count: count,
+        next: next,
+        previous: previous,
       };
+
+      // Cache the result
+      dataCache.set(cacheKey, responseData, cacheTTL);
+      logger.info(`[SCHOOL_SERVICE] Fetched and cached ${schools.length} schools for ${province_id}/${district_name}`, 'SCHOOL_SERVICE');
+
+      return responseData;
     } catch (error: any) {
       logger.error('Search schools error', 'SCHOOL_SERVICE', error);
       return { success: false, error: error.message || 'Failed to search schools', data: [], count: 0 };

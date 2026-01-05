@@ -32,6 +32,7 @@ export function clearToken() {
   sessionStorage.removeItem("token");
   sessionStorage.removeItem("refresh_token");
   sessionStorage.removeItem("user");
+  sessionStorage.removeItem("user_permissions"); // Clear permissions cache
   // Clear cookie as well
   document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
 }
@@ -53,22 +54,49 @@ export function isAuthenticated() {
 
 export function isAdmin(): boolean {
   if (typeof window === "undefined") return false;
-  const user = getUser();
-  if (!user) return false;
   
-  const role = user.role || user.user_role || '';
-  const isStaff = user.is_staff || user.is_admin || user.is_superuser || false;
+  // Use cached permissions to avoid refetching
+  const role = getUserRole();
   
   return (
     role.toLowerCase() === 'admin' ||
-    role.toLowerCase() === 'administrator' ||
-    isStaff === true
+    role.toLowerCase() === 'administrator'
   );
 }
 
 export function getUserRole(): string {
+  if (typeof window === "undefined") return 'user';
+  
+  // Try to get from cached permissions first (fastest)
+  try {
+    const cachedStr = sessionStorage.getItem('user_permissions');
+    if (cachedStr) {
+      const cached = JSON.parse(cachedStr);
+      const age = Date.now() - (cached.timestamp || 0);
+      // Cache valid for 24 hours
+      if (age < 24 * 60 * 60 * 1000 && cached.role) {
+        return cached.role;
+      }
+    }
+  } catch (error) {
+    // Ignore cache errors, fall through to user object
+  }
+  
+  // Fallback to user object
   const user = getUser();
-  return user?.role || user?.user_role || 'user';
+  const role = user?.role || user?.user_role || 'user';
+  
+  // Cache the role for next time
+  try {
+    sessionStorage.setItem('user_permissions', JSON.stringify({
+      role,
+      timestamp: Date.now(),
+    }));
+  } catch (error) {
+    // Ignore storage errors
+  }
+  
+  return role;
 }
 
 export function saveCredentials(username: string) {

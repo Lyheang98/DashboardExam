@@ -167,14 +167,28 @@ function LoginPageContent() {
         sessionStorage.setItem('refresh_token', refreshToken);
       }
 
-      const user = data.user || { 
+      // Extract role from response (for permissions caching)
+      const role = data.role || 'user';
+      
+      // Store minimal user data (email and role only - no preloading)
+      const user = { 
         email: trimmedUsername, 
-        name: trimmedUsername.split('@')[0], 
-        username: trimmedUsername 
+        name: trimmedUsername.split('@')[0],
+        role: role
       };
       
       setToken(token);
       setUser(user);
+      
+      // Cache permissions for fast access
+      try {
+        sessionStorage.setItem('user_permissions', JSON.stringify({
+          role,
+          timestamp: Date.now(),
+        }));
+      } catch (error) {
+        // Ignore storage errors
+      }
       
       if (rememberMe) {
         localStorage.setItem('rememberedEmail', trimmedUsername);
@@ -212,22 +226,26 @@ function LoginPageContent() {
         abortControllerRef.current = null;
       }
       
-      // Ignore abort errors that are expected (timeout or component unmount)
-      if (err.name === 'AbortError') {
-        // Check if it was a timeout or manual abort
-        const abortReason = err.message || '';
-        if (abortReason.includes('timeout') || abortReason.includes('Request timeout')) {
-          // Timeout - show user-friendly message
-          showToast('Request timed out. Please check your connection and try again.', 'error');
-          setLoading(false);
-        } else {
-          // Component unmounted or new request started - silently ignore
-          console.log('[LOGIN] Request was aborted:', abortReason);
-          return; // Don't show error or update loading state
-        }
-        return;
+      // Check if this is a timeout or abort error
+      // Handle both Error objects and string errors
+      const errorName = err?.name || '';
+      const errorMessage = typeof err === 'string' ? err : (err?.message || err?.toString() || '');
+      const errorString = String(err).toLowerCase();
+      
+      const isAbortError = errorName === 'AbortError' || errorName === 'DOMException';
+      const isTimeout = errorMessage.toLowerCase().includes('timeout') || 
+                       errorMessage.toLowerCase().includes('request timeout') ||
+                       errorMessage.toLowerCase().includes('20 seconds') ||
+                       errorString.includes('timeout');
+      
+      if (isAbortError || isTimeout) {
+        // Timeout detected - show user-friendly message (don't log to console)
+        showToast('Request timed out. Please check your connection and try again.', 'error');
+        setLoading(false);
+        return; // Exit early - don't log or process further
       }
       
+      // Only log non-abort, non-timeout errors
       console.error('[LOGIN] Error:', err);
       
       let errorMsg = 'Network error. Please try again.';

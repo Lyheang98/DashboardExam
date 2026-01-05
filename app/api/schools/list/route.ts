@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiClient, EXTERNAL_ENDPOINTS } from '@/lib/api/client';
 import { logger } from '@/lib/logger';
+import { dataCache, CACHE_KEYS } from '@/lib/cache/dataCache';
 
 /**
  * Schools List API Route
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
     const province_id = searchParams.get('province_id') || searchParams.get('province_ID') || undefined;
     const district_name = searchParams.get('district_name') || undefined;
     const school_name = searchParams.get('school_name') || undefined;
-    const limit = parseInt(searchParams.get('limit') || '1000', 10);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 25); // STRICT: limit ≤25
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const q = searchParams.get('q') || undefined; // Search query
 
@@ -51,6 +52,35 @@ export async function GET(request: NextRequest) {
 
     // Log request params for debugging
     logger.info(`[SCHOOLS] API request: province_id=${province_id}, district_name=${district_name}, school_name=${school_name}, q=${q}, limit=${limit}, offset=${offset}`, 'API/SCHOOLS');
+
+    // Build cache key from parameters (exclude pagination for cache key)
+    const cacheKey = CACHE_KEYS.SCHOOLS_LIST(`${province_id}:${district_name}:${school_name || ''}:${q || ''}`);
+
+    // Try to get from cache first (only if no search query to avoid stale results)
+    if (!q) {
+      const cachedSchools = dataCache.get<any[]>(cacheKey);
+      if (cachedSchools && cachedSchools.length >= 0) {
+        logger.info(`[SCHOOLS] Using cached schools data (${cachedSchools.length} schools)`, 'API/SCHOOLS');
+        
+        // Apply pagination to cached data
+        const totalCount = cachedSchools.length;
+        const start = offset;
+        const end = offset + limit;
+        const paginatedSchools = cachedSchools.slice(start, end);
+        
+        const cachedResponse = NextResponse.json({
+          success: true,
+          data: paginatedSchools,
+          count: totalCount,
+          total_students: 0,
+          next: end < totalCount ? `/api/schools/list?limit=${limit}&offset=${end}&province_id=${province_id}&district_name=${encodeURIComponent(district_name)}${q ? `&q=${q}` : ''}` : null,
+          previous: offset > 0 ? `/api/schools/list?limit=${limit}&offset=${Math.max(0, offset - limit)}&province_id=${province_id}&district_name=${encodeURIComponent(district_name)}${q ? `&q=${q}` : ''}` : null,
+        });
+        
+        cachedResponse.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        return cachedResponse;
+      }
+    }
 
     // Build URL for School API
     // NOTE: The external API uses province_ID (capital ID) according to Swagger docs
@@ -103,14 +133,17 @@ export async function GET(request: NextRequest) {
     // Map schools to ensure consistent format
     // NOTE: The API returns:
     // - count: total number of schools (pagination count)
-    // - geip_school_ID, province_ID, province_name, school_name, etc.
+    // - geip_school_ID, province_ID, province_name, school_name, school_type_h, school_type_k, etc.
     // - district_name may be empty
     // - student_count is NOT provided by this API endpoint
     const mappedSchools = schools.map((s: any) => ({
       province_id: s.province_ID || s.province_id || s.id,
+      province_name: s.province_name || s.province_Name || s.province || '',
       district_name: s.district_name || s.district_Name || '', // May be empty in API
       school_name: s.school_name || s.school_Name || s.name,
       geip_school_ID: s.geip_school_ID || s.geip_school_id || s.id,
+      school_type_h: s.school_type_h || s.school_type_H || s.school_type || '',
+      school_type_k: s.school_type_k || s.school_type_K || s.school_type_kh || '',
       // NOTE: student_count is NOT available from Schools API
       // If needed, it must be calculated separately or come from a different endpoint
       total_count: s.student_count || s.total_count || 0, // Will be 0 if not provided
@@ -141,6 +174,12 @@ export async function GET(request: NextRequest) {
       return nameA.localeCompare(nameB);
     });
 
+    // Cache the filtered schools (before pagination) for 10 minutes (only if no search query)
+    if (!q && filteredSchools.length > 0) {
+      dataCache.set(cacheKey, filteredSchools, 10 * 60 * 1000); // 10 minutes TTL
+      logger.info(`[SCHOOLS] Cached ${filteredSchools.length} schools for 10 minutes`, 'API/SCHOOLS');
+    }
+
     // Apply pagination if needed
     const totalCount = filteredSchools.length;
     const start = offset;
@@ -149,7 +188,7 @@ export async function GET(request: NextRequest) {
 
     logger.info(`[SCHOOLS] Successfully fetched ${filteredSchools.length} schools (returning ${paginatedSchools.length} with pagination)`, 'API/SCHOOLS');
 
-    return NextResponse.json({
+    const apiResponse = NextResponse.json({
       success: true,
       data: paginatedSchools,
       count: totalCount,
@@ -157,6 +196,11 @@ export async function GET(request: NextRequest) {
       next: end < totalCount ? `/api/schools/list?limit=${limit}&offset=${end}&province_id=${province_id}&district_name=${encodeURIComponent(district_name)}${q ? `&q=${q}` : ''}` : null,
       previous: offset > 0 ? `/api/schools/list?limit=${limit}&offset=${Math.max(0, offset - limit)}&province_id=${province_id}&district_name=${encodeURIComponent(district_name)}${q ? `&q=${q}` : ''}` : null,
     });
+    
+    // Add cache headers (shorter for search queries)
+    apiResponse.headers.set('Cache-Control', q ? 'public, s-maxage=60, stale-while-revalidate=120' : 'public, s-maxage=300, stale-while-revalidate=600');
+    
+    return apiResponse;
   } catch (error: any) {
     logger.error(`Schools API error: ${error.message}`, 'API/SCHOOLS', error);
     return NextResponse.json(

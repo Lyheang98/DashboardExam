@@ -27,6 +27,7 @@ import { useLanguage } from "@/lib/i18n/context";
 import { getToken } from "@/lib/auth";
 import { Loading } from "@/components/ui/Loading";
 import { dataCache } from "@/lib/cache/dataCache";
+import { districtService, provinceService } from "@/lib/api";
 
 // ============================================
 // TYPE DEFINITIONS
@@ -48,6 +49,35 @@ interface School {
   [key: string]: any;
 }
 
+// Fallback province data in case API fails
+const FALLBACK_PROVINCES = [
+  { province_id: '1', province_name: 'Banteay Meanchey' },
+  { province_id: '2', province_name: 'Battambang' },
+  { province_id: '3', province_name: 'Kampong Cham' },
+  { province_id: '4', province_name: 'Kampong Chhnang' },
+  { province_id: '5', province_name: 'Kampong Speu' },
+  { province_id: '6', province_name: 'Kampong Thom' },
+  { province_id: '7', province_name: 'Kampot' },
+  { province_id: '8', province_name: 'Kandal' },
+  { province_id: '9', province_name: 'Kep' },
+  { province_id: '10', province_name: 'Koh Kong' },
+  { province_id: '11', province_name: 'Kratie' },
+  { province_id: '12', province_name: 'Mondulkiri' },
+  { province_id: '13', province_name: 'Oddar Meanchey' },
+  { province_id: '14', province_name: 'Pailin' },
+  { province_id: '15', province_name: 'Phnom Penh' },
+  { province_id: '16', province_name: 'Preah Vihear' },
+  { province_id: '17', province_name: 'Prey Veng' },
+  { province_id: '18', province_name: 'Pursat' },
+  { province_id: '19', province_name: 'Ratanakiri' },
+  { province_id: '20', province_name: 'Siem Reap' },
+  { province_id: '21', province_name: 'Sihanoukville' },
+  { province_id: '22', province_name: 'Stung Treng' },
+  { province_id: '23', province_name: 'Svay Rieng' },
+  { province_id: '24', province_name: 'Takéo' },
+  { province_id: '25', province_name: 'Tboung Khmum' },
+];
+
 export default function SchoolsPage() {
   const { t, language } = useLanguage();
   // ============================================
@@ -55,11 +85,9 @@ export default function SchoolsPage() {
   // ============================================
 
   // Data state
-  const [allSchools, setAllSchools] = useState<School[]>([]); // Cache all schools for client-side filtering
-  const [schools, setSchools] = useState<School[]>([]); // Filtered schools
-  const [loading, setLoading] = useState(true); // Show loading initially
+  const [schools, setSchools] = useState<School[]>([]); // Schools from API
+  const [loading, setLoading] = useState(false); // Start with false - no auto-load
   const [mounted, setMounted] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true); // Track if we need to fetch all data
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -73,6 +101,14 @@ export default function SchoolsPage() {
   const [districtFilter, setDistrictFilter] = useState("");
   const [schoolTypeFilter, setSchoolTypeFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
+  
+  // Province options (from external API - ONE source of truth)
+  const [provinces, setProvinces] = useState<Array<{ province_id: string; province_name: string }>>([]);
+  const [provinceApiError, setProvinceApiError] = useState(false);
+  
+  // District options (populated when province is selected)
+  const [districts, setDistricts] = useState<Array<{ province_id: string; district_name: string }>>([]);
+  const [districtLoading, setDistrictLoading] = useState(false);
 
   // ============================================
   // PERFORMANCE OPTIMIZATION: Debouncing & Request Management
@@ -107,7 +143,7 @@ export default function SchoolsPage() {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchQuery]);
+  }, [searchQuery, debouncedSearchQuery]);
 
   // Debounce filter changes - faster for school type (200ms), normal for others (300ms)
   useEffect(() => {
@@ -158,10 +194,160 @@ export default function SchoolsPage() {
   }, []);
 
   // ============================================
+  // DATA FETCHING: Load provinces from external API (ONE source of truth)
+  // ============================================
+  useEffect(() => {
+    const loadProvinces = async () => {
+      try {
+        const result = await provinceService.getAll({
+          limit: 1000,
+          offset: 0,
+        });
+
+        if (result.success && result.data && Array.isArray(result.data)) {
+          // Filter out invalid provinces and map to clean format
+          const validProvinces = result.data
+            .filter((p: any) => {
+              const provinceId = (p.province_id || '').toString().trim();
+              const provinceName = (p.province_name || '').toString().trim();
+              return provinceId && 
+                     provinceId !== 'string' && 
+                     provinceId !== 'null' && 
+                     provinceId !== 'undefined' &&
+                     provinceName && 
+                     provinceName !== 'string' && 
+                     provinceName !== 'null';
+            })
+            .map((p: any) => ({
+              province_id: p.province_id,
+              province_name: p.province_name,
+            }))
+            .sort((a: { province_id: string; province_name: string }, b: { province_id: string; province_name: string }) => {
+              const nameA = (a.province_name || '').toLowerCase();
+              const nameB = (b.province_name || '').toLowerCase();
+              return nameA.localeCompare(nameB);
+            });
+          setProvinces(validProvinces);
+        }
+      } catch (error: any) {
+        logger.error('[SCHOOLS] Failed to fetch provinces, using fallback data', 'SCHOOLS', error);
+        setProvinceApiError(true);
+        // Use fallback provinces when API fails
+        setProvinces(FALLBACK_PROVINCES);
+      }
+    };
+
+    loadProvinces();
+  }, []);
+
+  // ============================================
+  // HIERARCHICAL FILTERS: Province selection triggers district fetch
+  // ============================================
+  useEffect(() => {
+    // Province selection may only trigger district fetch
+    if (!mounted || !provinceFilter || !provinceFilter.trim()) {
+      setDistricts([]);
+      setDistrictFilter(""); // Clear district when province is cleared
+      setSchools([]); // Clear schools when province is cleared
+      setTotal(0);
+      return;
+    }
+
+    // Use province_id from external API (never mix IDs from different sources)
+    const province = provinces.find(p => p.province_name === provinceFilter);
+    if (!province) {
+      logger.warn(`[SCHOOLS] Province not found in API data: ${provinceFilter}`, 'SCHOOLS');
+      setDistricts([]);
+      setDistrictFilter("");
+      return;
+    }
+
+    const province_id = province.province_id; // External API province_id only
+
+    // Fetch districts for selected province
+    const fetchDistricts = async () => {
+      setDistrictLoading(true);
+      try {
+        const token = getToken();
+        if (!token) {
+          logger.warn('[SCHOOLS] No token for district fetch', 'SCHOOLS');
+          setDistricts([]);
+          setDistrictLoading(false);
+          return;
+        }
+
+        logger.info(`[SCHOOLS] Fetching districts for province: ${province_id}`, 'SCHOOLS');
+        
+        const result = await districtService.getAll({
+          province_id: province_id,
+          limit: 10000,
+          offset: 0,
+        });
+
+        if (!result.success) {
+          logger.error(`[SCHOOLS] Failed to fetch districts: ${result.error}`, 'SCHOOLS');
+          setDistricts([]);
+          setDistrictLoading(false);
+          return;
+        }
+
+        const districtData = (result.data || []).map(d => ({
+          province_id: d.province_id,
+          district_name: d.district_name,
+        }));
+
+        setDistricts(districtData);
+        setDistrictFilter(""); // Clear district selection when province changes
+        setSchools([]); // Clear schools when province changes
+        setTotal(0);
+        
+        logger.info(`[SCHOOLS] Loaded ${districtData.length} districts for province ${province_id}`, 'SCHOOLS');
+      } catch (error: any) {
+        logger.error('[SCHOOLS] Error fetching districts', 'SCHOOLS', error);
+        setDistricts([]);
+      } finally {
+        setDistrictLoading(false);
+      }
+    };
+
+    fetchDistricts();
+  }, [mounted, provinceFilter, provinces]);
+
+  // ============================================
   // API CALLS - Optimized with Request Cancellation
   // ============================================
 
   const fetchSchools = useCallback(async () => {
+    // Do not call API unless BOTH province_id AND district_name are present
+    if (!debouncedFilters.province || !debouncedFilters.province.trim()) {
+      logger.info('[SCHOOLS] Skipping API call: province filter missing', 'SCHOOLS');
+      setSchools([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+
+    if (!debouncedFilters.district || !debouncedFilters.district.trim()) {
+      logger.info('[SCHOOLS] Skipping API call: district filter missing', 'SCHOOLS');
+      setSchools([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+
+    // Convert province name to province_id
+    const province = provinces.find(p => p.province_name === debouncedFilters.province);
+    if (!province) {
+      logger.warn(`[SCHOOLS] Province not found: ${debouncedFilters.province}`, 'SCHOOLS');
+      setSchools([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+
+    const province_id = province.province_id;
+    const district_name = debouncedFilters.district.trim();
+
     // Cancel previous request if still pending
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -171,15 +357,7 @@ export default function SchoolsPage() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-      // Set loading immediately for consistent UX
-      setLoading(true);
-      const startTime = Date.now();
-      // Use shorter minimum loading time for simple filters (school type, target)
-      const hasSimpleFilterOnly = debouncedFilters.schoolType && 
-        !debouncedSearchQuery && 
-        !debouncedFilters.province && 
-        !debouncedFilters.district;
-      const minLoadingTime = hasSimpleFilterOnly ? 150 : 300; // Faster for simple filters
+    setLoading(true);
 
     try {
       const token = getToken();
@@ -192,17 +370,16 @@ export default function SchoolsPage() {
         }
         return;
       }
-
-      // If we have cached data, skip API call and use client-side filtering
-      if (allSchools.length > 0 && !isInitialLoad) {
-        // Skip API call, use client-side filtering - instant response
-        setLoading(false);
-        return;
-      }
       
-      // Otherwise, make API call to fetch all schools (no filters on initial load)
+      // Build params with REQUIRED filters
       const params = new URLSearchParams();
-      // Don't send filters on initial load - fetch all schools for client-side filtering
+      params.append('province_id', province_id);
+      params.append('district_name', district_name);
+      
+      // Add optional filters
+      if (debouncedSearchQuery && debouncedSearchQuery.trim()) {
+        params.append('q', debouncedSearchQuery.trim());
+      }
 
       const response = await fetch(`/api/schools/search?${params.toString()}`, {
         headers: {
@@ -223,6 +400,19 @@ export default function SchoolsPage() {
           }
           return;
         }
+        
+        // Do not retry on 400 errors (missing parameters)
+        if (response.status === 400) {
+          const errorData = await response.json().catch(() => ({}));
+          logger.error(`[SCHOOLS] API returned 400 (bad request): ${errorData.error || 'Missing required parameters'}`, 'SCHOOLS');
+          if (!abortController.signal.aborted) {
+            setSchools([]);
+            setTotal(0);
+            setLoading(false);
+          }
+          return;
+        }
+        
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -244,6 +434,18 @@ export default function SchoolsPage() {
           }
           return;
         }
+        
+        // Do not retry on 400 errors (missing parameters)
+        if (data.error?.includes('required') || data.error?.includes('province_id') || data.error?.includes('district_name')) {
+          logger.error(`[SCHOOLS] API returned error (missing parameters): ${data.error}`, 'SCHOOLS');
+          if (!abortController.signal.aborted) {
+            setSchools([]);
+            setTotal(0);
+            setLoading(false);
+          }
+          return;
+        }
+        
         logger.error('API returned error', 'SCHOOLS', data.error);
         throw new Error(data.error || 'Failed to fetch schools');
       }
@@ -253,20 +455,8 @@ export default function SchoolsPage() {
 
       logger.info(`Fetched ${fetchedSchools.length} schools, count: ${data.count}`, 'SCHOOLS');
 
-      // Ensure minimum loading time for smooth UX
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
-
-      await new Promise(resolve => setTimeout(resolve, remainingTime));
-
-      // Double-check request wasn't cancelled during wait
+      // Double-check request wasn't cancelled
       if (!abortController.signal.aborted) {
-        // Always cache all schools for client-side filtering (data is small)
-        if (isInitialLoad) {
-          setAllSchools(fetchedSchools);
-          setIsInitialLoad(false);
-        }
-        
         setSchools(fetchedSchools);
         setTotal(data.count || fetchedSchools.length);
       }
@@ -296,11 +486,21 @@ export default function SchoolsPage() {
         setLoading(false);
       }
     }
-  }, [debouncedSearchQuery, debouncedFilters, allSchools, isInitialLoad]);
+  }, [debouncedSearchQuery, debouncedFilters, provinces]);
 
+  // NO auto-search on page load - only fetch when BOTH province AND district are selected
   useEffect(() => {
-    if (mounted) {
+    if (!mounted) return;
+    
+    // Only call API if BOTH filters are present
+    if (debouncedFilters.province && debouncedFilters.province.trim() && 
+        debouncedFilters.district && debouncedFilters.district.trim()) {
       fetchSchools();
+    } else {
+      // Clear schools if filters are missing
+      setSchools([]);
+      setTotal(0);
+      setLoading(false);
     }
 
     // Cleanup: abort request if component unmount or dependencies change
@@ -309,7 +509,8 @@ export default function SchoolsPage() {
         abortControllerRef.current.abort();
       }
     };
-  }, [mounted, fetchSchools]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, debouncedFilters.province, debouncedFilters.district, debouncedSearchQuery]);
 
 
   // Fetch total students count from 25 provinces
@@ -431,10 +632,12 @@ export default function SchoolsPage() {
     return false;
   }, []);
 
-  // Client-side filtering - always use this after initial load since data is small
+  // Client-side filtering - filter schools from API based on additional filters
+  // NOTE: Province and district filters are already applied at the API level (required parameters)
+  // Only apply additional client-side filters here (search query, school type, target status)
   const filteredSchools = useMemo(() => {
-    // Use allSchools if available (cached), otherwise use schools from API
-    const sourceData = allSchools.length > 0 ? allSchools : schools;
+    // Use schools from API as source data (already filtered by province and district)
+    const sourceData = schools;
     let filtered = [...sourceData];
     
     // Apply search filter (school name)
@@ -446,58 +649,18 @@ export default function SchoolsPage() {
       });
     }
     
-    // Apply province filter
-    if (debouncedFilters.province) {
-      filtered = filtered.filter(s => {
-        const province = (s.province_name || '').toLowerCase();
-        return province.includes(debouncedFilters.province.toLowerCase());
-      });
-    }
+    // NOTE: Province and district filters are NOT applied here because:
+    // 1. They are required API parameters (already filtered at API level)
+    // 2. Re-applying them here would cause incorrect filtering if field values don't match exactly
     
-    // Apply district filter
-    if (debouncedFilters.district) {
-      filtered = filtered.filter(s => {
-        const district = (s.district_name || '').toLowerCase();
-        return district.includes(debouncedFilters.district.toLowerCase());
-      });
-    }
-    
-    // Apply school type filter
+    // Apply school type filter - exact match with school_type_h
+    // The dropdown shows school_type_h values, so we match exactly
     if (debouncedFilters.schoolType) {
       const filterType = debouncedFilters.schoolType.trim();
       filtered = filtered.filter(s => {
         const typeH = (s.school_type_h || '').toString();
-        const typeK = (s.school_type_k || '').toString();
-        
-        // For "GEIP" filter, show only schools where school_type_h is exactly "GEIP" (not "GEIP-AF")
-        if (filterType.toLowerCase() === 'geip') {
-          const exactGEIP = (typeH.toLowerCase() === 'geip' || typeK.toLowerCase() === 'geip');
-          if (exactGEIP) {
-            // Make sure it's not GEIP-AF
-            const isAF = typeH.toLowerCase().includes('geip-af') || 
-                        typeK.toLowerCase().includes('geip-af') ||
-                        typeH.toLowerCase().includes('geip af') || 
-                        typeK.toLowerCase().includes('geip af');
-            return !isAF;
-          }
-          return false;
-        }
-        
-        // For "GEIP-AF" or "GEIP AF" filter
-        if (filterType.toLowerCase() === 'geip-af' || filterType.toLowerCase() === 'geip af') {
-          const typeHUpper = typeH.toUpperCase();
-          const typeKUpper = typeK.toUpperCase();
-          return typeHUpper.includes('GEIP-AF') || typeKUpper.includes('GEIP-AF') ||
-                 typeHUpper.includes('GEIP AF') || typeKUpper.includes('GEIP AF');
-        }
-        
-        // For other filters, use exact match first, then fall back to includes
-        const exactMatch = typeH.toLowerCase() === filterType.toLowerCase() || 
-                         typeK.toLowerCase() === filterType.toLowerCase();
-        if (exactMatch) return true;
-        
-        return typeH.toLowerCase().includes(filterType.toLowerCase()) || 
-               typeK.toLowerCase().includes(filterType.toLowerCase());
+        // Exact match with school_type_h (case-sensitive match with the dropdown values)
+        return typeH === filterType;
       });
     }
     
@@ -511,7 +674,7 @@ export default function SchoolsPage() {
     }
     
     return filtered;
-  }, [allSchools, schools, debouncedFilters, debouncedSearchQuery, isTargetSchool]);
+  }, [schools, debouncedFilters, debouncedSearchQuery, isTargetSchool]);
 
   const paginatedSchools = useMemo(
     () => filteredSchools.slice((page - 1) * perPage, page * perPage),
@@ -538,69 +701,24 @@ export default function SchoolsPage() {
     [page, perPage, effectiveTotal]
   );
 
-  // Get unique provinces with counts for filters (use allSchools if cached)
+  // Get provinces for dropdown (from external API - ONE source of truth)
   const provinceList = useMemo(() => {
-    const sourceData = allSchools.length > 0 && allSchools.length < 5000 ? allSchools : schools;
-    const provinceCounts = new Map<string, number>();
-    sourceData.forEach(school => {
-      if (school.province_name) {
-        const count = provinceCounts.get(school.province_name) || 0;
-        provinceCounts.set(school.province_name, count + 1);
-      }
-    });
-    return Array.from(provinceCounts.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [allSchools, schools]);
+    // Use provinces from external API only (never use constants for API calls)
+    return provinces.map(province => province.province_name).sort((a, b) => a.localeCompare(b));
+  }, [provinces]);
 
+  // Get unique school types from ALL schools (not filtered)
+  // This ensures the dropdown always shows all available school types
+  // regardless of other filter selections
   const uniqueSchoolTypes = useMemo(() => {
-    const sourceData = allSchools.length > 0 && allSchools.length < 5000 ? allSchools : schools;
-    
-    // Helper function to determine if a school is target (matches backend logic)
-    const isTargetSchool = (school: School): boolean => {
-      const typeH = (school.school_type_h || '').toString();
-      const typeK = (school.school_type_k || '').toString();
-      
-      // Check if school_type contains "សាលាគោលដៅ" (target school)
-      if (typeH.includes('សាលាគោលដៅ') || typeK.includes('សាលាគោលដៅ')) {
-        return true;
-      }
-      
-      // Also check for SRS or NET-SRS as they might be target schools
-      if (typeH.includes('SRS') || typeH.includes('NET-SRS')) {
-        // But exclude volunteer schools
-        if (typeH.includes('សាលាស្ម័គ្រចិត្ត') || typeK.includes('សាលាស្ម័គ្រចិត្ត')) {
-          return false;
-        }
-        return true;
-      }
-      
-      // Only use API fields if school_type doesn't exist
-      if (!typeH && !typeK) {
-        if (school.is_target !== undefined) return school.is_target === true;
-        if (school.target !== undefined) return school.target === true;
-      }
-      
-      // Default to not target
-      return false;
-    };
-    
-    // Filter by target status if target filter is applied
-    let filteredData = sourceData;
-    if (targetFilter) {
-      const isTarget = targetFilter === 'true' || targetFilter === '1';
-      filteredData = sourceData.filter(school => {
-        const schoolIsTarget = isTargetSchool(school);
-        return isTarget ? schoolIsTarget : !schoolIsTarget;
-      });
-    }
-    
     const types = new Set<string>();
-    filteredData.forEach(school => {
-      if (school.school_type_h) types.add(school.school_type_h);
+    schools.forEach(school => {
+      if (school.school_type_h) {
+        types.add(school.school_type_h);
+      }
     });
     return Array.from(types).sort();
-  }, [allSchools, schools, targetFilter]);
+  }, [schools]);
 
   // ============================================
   // HANDLERS
@@ -610,12 +728,12 @@ export default function SchoolsPage() {
   const columns: DataTableColumn<School>[] = useMemo(() => [
     { 
       key: 'school_name', 
-      label: t.schools.schoolName,
+      label: t.schools?.schoolName || 'School Name',
       render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
     },
     {
       key: 'province_name',
-      label: t.schools.province,
+      label: t.schools?.province || 'Province',
       render: (value) => value ? (
         <span className="text-primary font-semibold font-khmer">
           {value}
@@ -624,19 +742,19 @@ export default function SchoolsPage() {
     },
     {
       key: 'district_name',
-      label: t.schools.district,
+      label: t.schools?.district || 'District',
       render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
     },
     {
       key: 'school_type_h',
-      label: t.schools.schoolType,
+      label: t.schools?.schoolType || 'School Type',
       render: (value) => value ? <span className="font-khmer">{value}</span> : '-',
     },
     {
       key: 'is_target',
-      label: t.schools.targetStatus,
+      label: t.schools?.targetStatus || 'Target Status',
       render: (value, row) => {
-        const isTarget = row.is_target === true || row.target === true;
+        const isTarget = isTargetSchool(row);
         return (
           <span
             className={`px-3 py-1 rounded-full text-sm font-medium ${language === 'km' ? 'font-khmer' : ''} ${
@@ -645,12 +763,12 @@ export default function SchoolsPage() {
                 : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
             }`}
           >
-            {isTarget ? t.schools.target : t.schools.nonTarget}
+            {isTarget ? (t.schools?.target || 'Target') : (t.schools?.nonTarget || 'Non-Target')}
           </span>
         );
       },
     },
-  ], [t, language]);
+  ], [t, language, isTargetSchool]);
 
   return (
     <div className="w-full space-y-6">
@@ -664,8 +782,23 @@ export default function SchoolsPage() {
             {language === 'km' ? 'តម្រងសាលា' : 'Filter School'}
           </h1>
           <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
-            {t.schools.subtitle}
+            {t.schools?.subtitle || 'View and manage school information'}
           </p>
+          
+          {/* API Error Notification */}
+          {provinceApiError && (
+            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+              <div className="flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {language === 'km' 
+                  ? 'ប្រើប្រាស់ទិន្នន័យថេរដោយសារតែ Province API មិនអាចចូលដំណើរការបាន'
+                  : 'Using static province data due to API unavailability'
+                }
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filter Content */}
@@ -677,11 +810,11 @@ export default function SchoolsPage() {
                 htmlFor="search"
                 className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
               >
-                {t.schools.searchByName}
+                {t.schools?.searchByName || 'Search by Name'}
               </Label>
               <Input
                 id="search"
-                placeholder={t.schools.searchPlaceholder}
+                placeholder={t.schools?.searchPlaceholder || 'Search school name...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full font-khmer"
@@ -694,7 +827,7 @@ export default function SchoolsPage() {
                 htmlFor="province-filter"
                 className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
               >
-                {t.schools.province}
+                {t.schools?.province || 'Province'}
               </Label>
               <select
                 id="province-filter"
@@ -702,10 +835,10 @@ export default function SchoolsPage() {
                 onChange={(e) => setProvinceFilter(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
               >
-                <option value="" className="font-khmer">{t.schools.allProvinces}</option>
-                {provinceList.map((province) => (
-                  <option key={province.name} value={province.name} className="font-khmer">
-                    {province.name} ({province.count})
+                <option value="" className="font-khmer">{t.schools?.allProvinces || 'All Provinces'}</option>
+                {provinces.sort((a, b) => a.province_name.localeCompare(b.province_name)).map((province) => (
+                  <option key={province.province_id} value={province.province_name} className="font-khmer">
+                    {province.province_name}
                   </option>
                 ))}
               </select>
@@ -717,15 +850,24 @@ export default function SchoolsPage() {
                 htmlFor="district-filter"
                 className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
               >
-                {t.schools.district}
+                {t.schools?.district || 'District'}
               </Label>
-              <Input
+              <select
                 id="district-filter"
-                placeholder={`${t.common.filter} ${t.schools.district}...`}
                 value={districtFilter}
                 onChange={(e) => setDistrictFilter(e.target.value)}
-                className="w-full font-khmer"
-              />
+                disabled={!provinceFilter || districtLoading}
+                className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="" className="font-khmer">
+                  {districtLoading ? (language === 'km' ? 'កំពុងផ្ទុក...' : 'Loading...') : (language === 'km' ? 'សូមជ្រើសស្រុក' : 'Select District')}
+                </option>
+                {districts.map((district) => (
+                  <option key={district.district_name} value={district.district_name} className="font-khmer">
+                    {district.district_name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* School Type Filter */}
@@ -734,7 +876,7 @@ export default function SchoolsPage() {
                 htmlFor="school-type-filter"
                 className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
               >
-                {t.schools.schoolType}
+                {t.schools?.schoolType || 'School Type'}
               </Label>
               <select
                 id="school-type-filter"
@@ -742,7 +884,7 @@ export default function SchoolsPage() {
                 onChange={(e) => setSchoolTypeFilter(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-khmer"
               >
-                <option value="" className="font-khmer">{t.schools.allTypes}</option>
+                <option value="" className="font-khmer">{t.schools?.allTypes || 'All Types'}</option>
                 {uniqueSchoolTypes.map((type) => (
                   <option key={type} value={type} className="font-khmer">
                     {type}
@@ -757,7 +899,7 @@ export default function SchoolsPage() {
                 htmlFor="target-filter"
                 className={`text-sm font-medium text-primary ${language === 'km' ? 'font-khmer' : ''}`}
               >
-                {t.schools.targetStatus}
+                {t.schools?.targetStatus || 'Target Status'}
               </Label>
               <select
                 id="target-filter"
@@ -765,9 +907,9 @@ export default function SchoolsPage() {
                 onChange={(e) => setTargetFilter(e.target.value)}
                 className={`w-full rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${language === 'km' ? 'font-khmer' : ''}`}
               >
-                <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.allSchools}</option>
-                <option value="true" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.targetSchools}</option>
-                <option value="false" className={language === 'km' ? 'font-khmer' : ''}>{t.schools.nonTargetSchools}</option>
+                <option value="" className={language === 'km' ? 'font-khmer' : ''}>{t.schools?.allSchools || 'All Schools'}</option>
+                <option value="true" className={language === 'km' ? 'font-khmer' : ''}>{t.schools?.targetSchools || 'Target Schools'}</option>
+                <option value="false" className={language === 'km' ? 'font-khmer' : ''}>{t.schools?.nonTargetSchools || 'Non-Target Schools'}</option>
               </select>
             </div>
           </div>
@@ -783,7 +925,7 @@ export default function SchoolsPage() {
             {language === 'km' ? 'សាលា' : 'School'}
           </h1>
           <p className={`text-muted-foreground mt-2 text-sm ${language === 'km' ? 'font-khmer' : ''}`}>
-            {t.schools.manageAndView} ({effectiveTotal} {t.schools.total})
+            {t.schools?.manageAndView || 'Manage and view schools'} ({effectiveTotal} {t.schools?.total || 'total'})
           </p>
         </div>
       </div>
@@ -795,8 +937,8 @@ export default function SchoolsPage() {
         <CardContent>
           {loading ? (
             <Loading
-              title={t.common.loadingData}
-              description={t.common.pleaseWait}
+              title={t.common?.loadingData || 'Loading data'}
+              description={t.common?.pleaseWait || 'Please wait'}
               showSkeleton={true}
               language={language}
             />
@@ -813,7 +955,7 @@ export default function SchoolsPage() {
               {/* ============================================ */}
               <div className="flex items-center justify-between mt-4 pt-4 border-t">
                 <div className={`text-sm text-muted-foreground ${language === 'km' ? 'font-khmer' : ''}`}>
-                  {t.common.showing} {start}–{end} {t.common.of} {effectiveTotal}
+                  {t.common?.showing || 'Showing'} {start}–{end} {t.common?.of || 'of'} {effectiveTotal}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -824,11 +966,11 @@ export default function SchoolsPage() {
                     disabled={page === 1}
                     className={language === 'km' ? 'font-khmer' : ''}
                   >
-                    {t.common.prev}
+                    {t.common?.prev || 'Previous'}
                   </Button>
 
                   <div className={`px-3 text-sm text-muted-foreground ${language === 'km' ? 'font-khmer' : ''}`}>
-                    {t.common.page} {page} {t.common.of} {totalPages}
+                    {t.common?.page || 'Page'} {page} {t.common?.of || 'of'} {totalPages}
                   </div>
 
                   <Button
@@ -843,7 +985,7 @@ export default function SchoolsPage() {
                     disabled={page >= totalPages || loading}
                     className={language === 'km' ? 'font-khmer' : ''}
                   >
-                    {t.common.next}
+                    {t.common?.next || 'Next'}
                   </Button>
 
                   <select
@@ -865,7 +1007,10 @@ export default function SchoolsPage() {
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <p className={language === 'km' ? 'font-khmer' : ''}>
-                {t.common.noData}
+                {provinceFilter && districtFilter ? 
+                  (t.common?.noData || 'No data found') : 
+                  (language === 'km' ? 'សូមជ្រើសរើសខេត្ត និងស្រុកដើម្បីមើលសាលា' : 'Please select a province and district to view schools')
+                }
               </p>
             </div>
           )}

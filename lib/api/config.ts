@@ -72,6 +72,32 @@ export const EXTERNAL_ENDPOINTS = {
     BY_ROOM: (provinceId: string, districtName: string, schoolName: string, grade: string, room: string) => 
       `${EXTERNAL_API_BASE}/api/Base/data/v1/students/${encodeURIComponent(provinceId)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(schoolName)}/grades/${encodeURIComponent(grade)}/rooms/${encodeURIComponent(room)}/`,
   },
+  RESULT_SUBJECTS: {
+    // Base endpoint
+    BASE: `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects/`,
+    // Hierarchical endpoints - enforce safe usage by design
+    BY_PROVINCE: (provinceName: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects/${encodeURIComponent(provinceName)}/`,
+    BY_DISTRICT: (provinceName: string, districtName: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects/${encodeURIComponent(provinceName)}/districts/${encodeURIComponent(districtName)}/`,
+    BY_SCHOOL: (provinceName: string, districtName: string, geipSchoolId: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects/${encodeURIComponent(provinceName)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(geipSchoolId)}/`,
+    BY_GRADE: (provinceName: string, districtName: string, geipSchoolId: string, gradeName: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects/${encodeURIComponent(provinceName)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(geipSchoolId)}/grades/${encodeURIComponent(gradeName)}/`,
+    BY_ROOM: (provinceName: string, districtName: string, geipSchoolId: string, gradeName: string, room: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects/${encodeURIComponent(provinceName)}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(geipSchoolId)}/grades/${encodeURIComponent(gradeName)}/rooms/${encodeURIComponent(room)}/`,
+    // Monthly/Yearly aggregation endpoints
+    BY_MONTH_YEAR: (provinceId: string, month: number, year: number) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects-byMonth-Year/${encodeURIComponent(provinceId)}/${month}/${year}/`,
+    BY_MONTH_YEAR_DISTRICT: (provinceId: string, month: number, year: number, districtName: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects-byMonth-Year/${encodeURIComponent(provinceId)}/${month}/${year}/districts/${encodeURIComponent(districtName)}/`,
+    BY_MONTH_YEAR_SCHOOL: (provinceId: string, month: number, year: number, districtName: string, geipSchoolId: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects-byMonth-Year/${encodeURIComponent(provinceId)}/${month}/${year}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(geipSchoolId)}/`,
+    BY_MONTH_YEAR_GRADE: (provinceId: string, month: number, year: number, districtName: string, geipSchoolId: string, gradeName: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects-byMonth-Year/${encodeURIComponent(provinceId)}/${month}/${year}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(geipSchoolId)}/grades/${encodeURIComponent(gradeName)}/`,
+    BY_MONTH_YEAR_ROOM: (provinceId: string, month: number, year: number, districtName: string, geipSchoolId: string, gradeName: string, room: string) => 
+      `${EXTERNAL_API_BASE}/api/v1/result/result-Subjects-byMonth-Year/${encodeURIComponent(provinceId)}/${month}/${year}/districts/${encodeURIComponent(districtName)}/schools/${encodeURIComponent(geipSchoolId)}/grades/${encodeURIComponent(gradeName)}/rooms/${encodeURIComponent(room)}/`,
+  },
 } as const;
 
 export const INTERNAL_ENDPOINTS = {

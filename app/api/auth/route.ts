@@ -64,12 +64,16 @@ export async function POST(request: NextRequest) {
 
     logger.info(`User logged in: ${email}`, 'AUTH');
     
-    // Create response with token and user data
+    // Extract role from API response (if available)
+    const userData = data.user || data.data?.user || {};
+    const role = userData.role || userData.user_role || userData.role_name || 'user';
+    
+    // Create response with token and role only (minimal data for performance)
     const response = NextResponse.json({
       success: true,
       token,
       refresh_token: refreshToken || null, // Include refresh token if available
-      user: data.user || data.data?.user || { email, name: email.split('@')[0] },
+      role, // Return role for permissions caching
     });
 
     // Set token in cookie for middleware access

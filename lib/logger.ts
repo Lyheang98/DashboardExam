@@ -17,24 +17,54 @@ interface LogEntry {
   error?: string;
 }
 
+/**
+ * Get current time in Cambodia (Asia/Phnom_Penh)
+ * Format: YYYY-MM-DD HH:mm:ss
+ */
+export function nowCambodia(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Phnom_Penh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
+
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 class Logger {
   private isDevelopment = process.env.NODE_ENV === 'development';
 
   log(level: LogLevel, message: string, context?: string, error?: any) {
     const entry: LogEntry = {
-      timestamp: new Date().toISOString(),
+      timestamp: nowCambodia(), // ✅ Cambodia time
       level,
       message,
       context,
-      error: error instanceof Error ? error.message : String(error),
+      ...(error !== undefined &&
+        error !== null && {
+          error: error instanceof Error ? error.message : String(error),
+        }),
     };
 
     if (this.isDevelopment) {
       const style = this.getConsoleStyle(level);
-      console.log(`[${entry.timestamp}] ${style}${level}${style ? '\x1b[0m' : ''} ${message}`, {
-        context,
-        error: entry.error,
-      });
+      const logData: any = { context };
+
+      if (error !== undefined && error !== null) {
+        logData.error = error instanceof Error ? error.message : String(error);
+      }
+
+      console.log(
+        `[${entry.timestamp}] ${style}${level}${style ? '\x1b[0m' : ''} ${message}`,
+        logData
+      );
     }
   }
 

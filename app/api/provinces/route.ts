@@ -1,45 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiClient, EXTERNAL_ENDPOINTS } from '@/lib/api/client';
 import { logger } from '@/lib/logger';
-
-/**
- * Province Name Map (for displaying province names)
- * Since the API may only return province_ID, we need a mapping for names
- * This can be replaced if the API starts returning province_name
- */
-const PROVINCE_NAMES: Record<string, string> = {
-  "1": "ខេត្តបន្ទាយមានជ័យ",
-  "2": "ខេត្តបាត់ដំបង",
-  "3": "ខេត្តកំពង់ចាម",
-  "4": "ខេត្តកំពង់ឆ្នាំង",
-  "5": "ខេត្តកំពង់ស្ពឺ",
-  "6": "ខេត្តកំពង់ធំ",
-  "7": "ខេត្តកំពត",
-  "8": "ខេត្តកណ្ដាល",
-  "9": "ខេត្តកោះកុង",
-  "10": "ខេត្តក្រចេះ",
-  "11": "ខេត្តមណ្ឌលគិរី",
-  "12": "រាជធានីភ្នំពេញ",
-  "13": "ខេត្តព្រះវិហារ",
-  "14": "ខេត្តព្រៃវែង",
-  "15": "ខេត្តពោធិ៍សាត់",
-  "16": "ខេត្តរតនគិរី",
-  "17": "ខេត្តសៀមរាប",
-  "18": "ខេត្តព្រះសីហនុ",
-  "19": "ខេត្តស្ទឹងត្រែង",
-  "20": "ខេត្តស្វាយរៀង",
-  "21": "ខេត្តតាកែវ",
-  "22": "ខេត្តកែប",
-  "23": "ខេត្តប៉ៃលិន",
-  "24": "ខេត្តឧត្តរមានជ័យ",
-  "25": "ខេត្តត្បូងឃ្មុំ",
-};
+import { dataCache } from '@/lib/cache/dataCache';
+import { PROVINCES } from '@/lib/constants/provinces';
 
 /**
  * Provinces API Route
- * NOTE: There is NO Province lookup endpoint in the external API
- * Solution: Extract unique provinces from Schools API, then aggregate student counts
- * CRITICAL: Does NOT use Student API - aggregates from Schools (which uses backend aggregation)
+ * Always returns 200 OK with valid response structure
+ * Uses external lookup API when available, falls back to constants on 404
+ * Never caches or exposes upstream 404 errors to clients
  */
 export async function GET(request: NextRequest) {
   try {
@@ -64,76 +33,100 @@ export async function GET(request: NextRequest) {
 
     logger.info(`[PROVINCES] API request: limit=${limit}, offset=${offset}`, 'API/PROVINCES');
 
-    // Step 1: Fetch all schools from the API to extract unique provinces
-    // This gets us the actual provinces that exist in the database (API-based, not hardcoded)
-    logger.info('[PROVINCES] Fetching all schools to extract unique provinces', 'API/PROVINCES');
+    // Build cache key (only cache successful API responses)
+    const cacheKey = `provinces:${province_id || 'all'}:${province_name || 'all'}`;
     
-    let allSchoolsUrl = EXTERNAL_ENDPOINTS.SCHOOLS.LIST;
-    const schoolsParams = new URLSearchParams();
-    schoolsParams.append('limit', '100000'); // Get all schools
-    schoolsParams.append('offset', '0');
-    allSchoolsUrl += `?${schoolsParams.toString()}`;
-    
-    const allSchoolsResponse = await apiClient.get(allSchoolsUrl, { token });
-    
-    if (!allSchoolsResponse.success) {
-      const errorMsg = allSchoolsResponse.error || 'Failed to fetch schools';
-      logger.error(`[PROVINCES] Failed to fetch schools: ${errorMsg}`, 'API/PROVINCES');
+    // Try to get from cache first (only successful API responses are cached)
+    const cachedProvinces = dataCache.get<any[]>(cacheKey);
+    if (cachedProvinces && cachedProvinces.length >= 0) {
+      logger.info(`[PROVINCES] Using cached provinces data (${cachedProvinces.length} provinces)`, 'API/PROVINCES');
       
-      // Check if it's an authentication error
-      if (errorMsg.includes('Authentication') || errorMsg.includes('401') || errorMsg.includes('expired') || errorMsg.includes('login')) {
-        return NextResponse.json(
-          { success: false, error: 'Authentication expired. Please login again.' },
-          { status: 401 }
-        );
-      }
+      // Apply pagination to cached data
+      const totalCount = cachedProvinces.length;
+      const start = offset;
+      const end = offset + limit;
+      const paginatedProvinces = cachedProvinces.slice(start, end);
       
-      return NextResponse.json(
-        { success: false, error: errorMsg },
-        { status: 500 }
-      );
+      const cachedResponse = NextResponse.json({
+        success: true,
+        data: paginatedProvinces,
+        count: totalCount,
+        total_students: 0,
+        next: end < totalCount ? `/api/provinces?limit=${limit}&offset=${end}${province_id ? `&province_id=${province_id}` : ''}${province_name ? `&province_name=${province_name}` : ''}` : null,
+        previous: offset > 0 ? `/api/provinces?limit=${limit}&offset=${Math.max(0, offset - limit)}${province_id ? `&province_id=${province_id}` : ''}${province_name ? `&province_name=${province_name}` : ''}` : null,
+      });
+      
+      cachedResponse.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+      return cachedResponse;
     }
 
-    const allSchoolsData = allSchoolsResponse.data as any;
-    const allSchools = allSchoolsData?.results || allSchoolsData?.data || (Array.isArray(allSchoolsData) ? allSchoolsData : []);
+    // Build URL for Province lookup API
+    let url = EXTERNAL_ENDPOINTS.PROVINCES.LIST;
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    if (offset) params.append('offset', offset.toString());
+    if (province_id) params.append('province_id', province_id);
+    if (province_name) params.append('province_name', province_name);
     
-    // Step 2: Extract unique provinces from schools data
-    const provinceMap = new Map<string, { province_id: string; province_name: string; schools: any[] }>();
-    
-    for (const school of allSchools) {
-      const provinceId = (school.province_ID || school.province_id || '').toString().trim();
-      const provinceName = school.province_name || PROVINCE_NAMES[provinceId] || `Province ${provinceId}`;
-      
-      if (!provinceId) continue;
-      
-      if (!provinceMap.has(provinceId)) {
-        provinceMap.set(provinceId, {
-          province_id: provinceId,
-          province_name: provinceName,
-          schools: [],
-        });
-      }
-      
-      provinceMap.get(provinceId)!.schools.push(school);
+    if (params.toString()) {
+      url += `?${params.toString()}`;
     }
-    
-    logger.info(`[PROVINCES] Found ${provinceMap.size} unique provinces from Schools API`, 'API/PROVINCES');
-    
-    // Step 3: Map provinces (no student count - API doesn't provide it)
-    const allProvinces = Array.from(provinceMap.values()).map((province) => {
-      // Note: The Schools API does not provide student_count per school
-      // So we cannot aggregate student counts for provinces
-      logger.info(`[PROVINCES] Province ${province.province_id} (${province.province_name}): ${province.schools.length} schools`, 'API/PROVINCES');
+
+    // Fetch from Province lookup API
+    logger.info(`[PROVINCES] Calling external API: ${url}`, 'API/PROVINCES');
+    const response = await apiClient.get(url, { token });
+
+    let provinces: any[] = [];
+    let useFallback = false;
+
+    if (!response.success) {
+      // Detect 404 from upstream API
+      const errorMsg = response.error || '';
+      const isNotFound = errorMsg.includes('Status: 404') || 
+                         errorMsg.includes('404') ||
+                         errorMsg.includes('Not Found') || 
+                         errorMsg.includes('<!doctype html>');
       
-      return {
-        province_id: province.province_id,
-        province_name: province.province_name,
-        total_count: 0, // No student count available from API
-      };
-    });
+      if (isNotFound) {
+        // Log 404 internally but don't expose to client - use fallback instead
+        logger.warn(`[PROVINCES] Upstream API returned 404, using constants fallback: ${url}`, 'API/PROVINCES');
+        useFallback = true;
+      } else {
+        // For other errors, log and use fallback as well
+        logger.error(`[PROVINCES] API failed, using constants fallback: ${response.error}`, 'API/PROVINCES');
+        useFallback = true;
+      }
+    } else {
+      // Parse successful API response
+      const data = response.data as any;
+      provinces = data?.results || data?.data || (Array.isArray(data) ? data : []);
+      
+      // Normalize province data from API
+      provinces = provinces.map((p: any) => ({
+        province_id: p.province_id || p.id || '',
+        province_name: p.province_name || p.name || '',
+        total_count: p.total_count || p.count || 0,
+      })).filter((p: any) => p.province_id && p.province_name);
+    }
+
+    // Use constants fallback if API failed or returned empty
+    if (useFallback || provinces.length === 0) {
+      provinces = PROVINCES.map(p => ({
+        province_id: p.province_id,
+        province_name: p.province_name,
+        total_count: 0,
+      }));
+      
+      // Only cache successful API responses, not fallback data
+      // This ensures we retry the API on next request
+    } else {
+      // Cache successful API responses for 15 minutes
+      dataCache.set(cacheKey, provinces, 15 * 60 * 1000);
+      logger.info(`[PROVINCES] Cached ${provinces.length} provinces from API for 15 minutes`, 'API/PROVINCES');
+    }
 
     // Apply filters if provided
-    let filteredProvinces = allProvinces;
+    let filteredProvinces = provinces;
     
     if (province_id) {
       filteredProvinces = filteredProvinces.filter(p => p.province_id === province_id);
@@ -153,14 +146,19 @@ export async function GET(request: NextRequest) {
 
     logger.info(`[PROVINCES] Successfully fetched ${filteredProvinces.length} provinces (returning ${paginatedProvinces.length} with pagination)`, 'API/PROVINCES');
 
-    return NextResponse.json({
+    const apiResponse = NextResponse.json({
       success: true,
       data: paginatedProvinces,
       count: totalCount,
-      total_students: 0, // No student count available from API
+      total_students: 0,
       next: end < totalCount ? `/api/provinces?limit=${limit}&offset=${end}${province_id ? `&province_id=${province_id}` : ''}${province_name ? `&province_name=${province_name}` : ''}` : null,
       previous: offset > 0 ? `/api/provinces?limit=${limit}&offset=${Math.max(0, offset - limit)}${province_id ? `&province_id=${province_id}` : ''}${province_name ? `&province_name=${province_name}` : ''}` : null,
     });
+    
+    // Add cache headers for client-side caching (5 minutes)
+    apiResponse.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    
+    return apiResponse;
   } catch (error: any) {
     logger.error(`Provinces API error: ${error.message}`, 'API/PROVINCES', error);
     return NextResponse.json(

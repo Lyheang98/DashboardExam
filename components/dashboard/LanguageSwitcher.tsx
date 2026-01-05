@@ -89,7 +89,7 @@ export function LanguageSwitcher() {
                   {lang.nativeName}
                 </span>
                 <span className={`text-xs text-muted-foreground ${isKhmer ? 'font-khmer' : ''}`} lang={isKhmer ? 'km' : undefined}>
-                  {lang.name}
+                  {isKhmer ? 'Kantumruy' : lang.name}
                 </span>
               </div>
             </DropdownMenuItem>

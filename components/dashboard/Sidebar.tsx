@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, ChevronDown, School, GraduationCap, MapPin, Building2, Map } from "lucide-react";
+import { LayoutDashboard, Users, Settings, ChevronDown, School, GraduationCap, MapPin, Building2, Map, Trophy, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/optimized-image";
@@ -20,6 +20,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const { t } = useLanguage();
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
   const [isDataExpanded, setIsDataExpanded] = useState(false);
+  const [isLeaderboardExpanded, setIsLeaderboardExpanded] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-expand settings menu when on any settings page
@@ -33,6 +34,13 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   useEffect(() => {
     if (pathname.startsWith("/dashboard/student")) {
       setIsDataExpanded(true);
+    }
+  }, [pathname]);
+
+  // Auto-expand leaderboard menu when on any leaderboard pages
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/leaderboard")) {
+      setIsLeaderboardExpanded(true);
     }
   }, [pathname]);
 
@@ -54,6 +62,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     { id: 'district', icon: Map, label: 'District', href: '/dashboard/student/district' },
     { id: 'school', icon: Building2, label: 'School', href: '/dashboard/student/school' },
     { id: 'students', icon: GraduationCap, label: 'Students', href: '/dashboard/student/students' },
+  ];
+
+  const leaderboardMenuItems = [
+    { id: 'all', label: 'All', href: '/dashboard/leaderboard/all' },
+    { id: 'monthly', label: 'Monthly', href: '/dashboard/leaderboard/monthly' },
+    { id: 'daily', label: 'Daily', href: '/dashboard/leaderboard/daily' },
   ];
 
   const settingsMenuItems = [
@@ -240,6 +254,105 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 </div>
               )}
             </div>
+
+            {/* Leaderboard with Dropdown */}
+            <div 
+              className="space-y-0"
+              onMouseEnter={() => {
+                if (hoverTimeoutRef.current) {
+                  clearTimeout(hoverTimeoutRef.current);
+                }
+                setIsLeaderboardExpanded(true);
+              }}
+              onMouseLeave={() => {
+                hoverTimeoutRef.current = setTimeout(() => {
+                  setIsLeaderboardExpanded(false);
+                }, 200);
+              }}
+            >
+              <Button
+                variant="ghost"
+                onClick={() => setIsLeaderboardExpanded(!isLeaderboardExpanded)}
+                onMouseEnter={() => {
+                  if (hoverTimeoutRef.current) {
+                    clearTimeout(hoverTimeoutRef.current);
+                  }
+                  setIsLeaderboardExpanded(true);
+                }}
+                onMouseLeave={() => {
+                  hoverTimeoutRef.current = setTimeout(() => {
+                    setIsLeaderboardExpanded(false);
+                  }, 200);
+                }}
+                className={cn(
+                  "w-full justify-between h-10 px-3 gap-3",
+                  "hover:bg-primary/10 hover:text-primary",
+                  "dark:hover:bg-primary/10 dark:hover:text-primary",
+                  "transition-colors duration-200"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <Trophy className="h-4 w-4 shrink-0" />
+                  <span className="text-sm">Leaderboard</span>
+                </div>
+                <ChevronDown className={cn(
+                  "h-4 w-4 shrink-0 transition-transform duration-200 ease-in-out",
+                  isLeaderboardExpanded && "rotate-180"
+                )} />
+              </Button>
+
+              {/* Leaderboard Submenu */}
+              {isLeaderboardExpanded && (
+                <div 
+                  className="ml-6 space-y-0.5 mt-0 animate-in fade-in slide-in-from-top-2 duration-200"
+                  onMouseEnter={() => {
+                    if (hoverTimeoutRef.current) {
+                      clearTimeout(hoverTimeoutRef.current);
+                    }
+                    setIsLeaderboardExpanded(true);
+                  }}
+                  onMouseLeave={() => {
+                    hoverTimeoutRef.current = setTimeout(() => {
+                      setIsLeaderboardExpanded(false);
+                    }, 200);
+                  }}
+                >
+                  {leaderboardMenuItems.map((item) => {
+                    return (
+                      <Link key={item.id} href={item.href} prefetch={true}>
+                        <button
+                          onClick={onClose}
+                          className={cn(
+                            "w-full text-left h-9 px-3 rounded-md text-sm",
+                            "transition-colors duration-200 ease-in-out",
+                            "hover:bg-primary/5 hover:text-primary text-muted-foreground dark:text-muted-foreground"
+                          )}
+                        >
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Student Tracker - No submenu */}
+            <Link href="/dashboard/student-tracker" prefetch={true}>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start gap-3 h-10 px-3",
+                  "hover:bg-primary/10 hover:text-primary",
+                  "dark:hover:bg-primary/10 dark:hover:text-primary",
+                  "transition-colors duration-200"
+                )}
+                onClick={onClose}
+              >
+                <TrendingUp className="h-4 w-4 shrink-0" />
+                <span className="text-sm">Student Tracker</span>
+              </Button>
+            </Link>
 
             {/* Settings with Dropdown */}
             <div 
