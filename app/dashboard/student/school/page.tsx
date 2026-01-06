@@ -115,26 +115,26 @@ export default function SchoolsPage() {
   // ============================================
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [debouncedFilters, setDebouncedFilters] = useState({
+  const hasInitialLoadRef = useRef(false);
+  
+  // Applied filters (used for data fetching) - only updated when "Apply Filters" is clicked
+  const [appliedFilters, setAppliedFilters] = useState({
     province: "",
     district: "",
     schoolType: "",
     target: "",
+    searchQuery: "",
   });
-
-  // Debounce search query (300ms for faster response)
+  
+  // Debounce search query (300ms) - search can still be real-time for better UX
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     searchTimeoutRef.current = setTimeout(() => {
-      // Only reset page if search actually changed
-      if (searchQuery !== debouncedSearchQuery) {
-        setPage(1);
-      }
       setDebouncedSearchQuery(searchQuery);
     }, 300);
 
@@ -143,55 +143,35 @@ export default function SchoolsPage() {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchQuery, debouncedSearchQuery]);
-
-  // Debounce filter changes - faster for school type (200ms), normal for others (300ms)
-  useEffect(() => {
-    if (filterTimeoutRef.current) {
-      clearTimeout(filterTimeoutRef.current);
-    }
-    
-    // Use shorter debounce if only school type changed (small dataset, fast filter)
-    const isOnlySchoolTypeChange = schoolTypeFilter !== debouncedFilters.schoolType &&
-      provinceFilter === debouncedFilters.province &&
-      districtFilter === debouncedFilters.district &&
-      targetFilter === debouncedFilters.target;
-    
-    const debounceTime = isOnlySchoolTypeChange ? 200 : 300;
-    
-    filterTimeoutRef.current = setTimeout(() => {
-      const newFilters = {
-        province: provinceFilter,
-        district: districtFilter,
-        schoolType: schoolTypeFilter,
-        target: targetFilter,
-      };
-      
-      // Check if filters actually changed
-      const filtersChanged = 
-        newFilters.province !== debouncedFilters.province ||
-        newFilters.district !== debouncedFilters.district ||
-        newFilters.schoolType !== debouncedFilters.schoolType ||
-        newFilters.target !== debouncedFilters.target;
-      
-      setDebouncedFilters(newFilters);
-      
-      // Reset to first page only if filters actually changed
-      if (filtersChanged) {
-        setPage(1);
-      }
-    }, debounceTime);
-
-    return () => {
-      if (filterTimeoutRef.current) {
-        clearTimeout(filterTimeoutRef.current);
-      }
-    };
-  }, [provinceFilter, districtFilter, schoolTypeFilter, targetFilter, debouncedFilters]);
+  }, [searchQuery]);
+  
+  // Check if there are pending filter changes (filters changed but not applied)
+  const hasPendingFilters = useMemo(() => {
+    return (
+      provinceFilter !== appliedFilters.province ||
+      districtFilter !== appliedFilters.district ||
+      schoolTypeFilter !== appliedFilters.schoolType ||
+      targetFilter !== appliedFilters.target ||
+      debouncedSearchQuery !== appliedFilters.searchQuery
+    );
+  }, [provinceFilter, districtFilter, schoolTypeFilter, targetFilter, debouncedSearchQuery, appliedFilters]);
+  
+  // Handler for Apply Filters button
+  const handleApplyFilters = useCallback(() => {
+    setAppliedFilters({
+      province: provinceFilter,
+      district: districtFilter,
+      schoolType: schoolTypeFilter,
+      target: targetFilter,
+      searchQuery: debouncedSearchQuery,
+    });
+    setPage(1); // Reset to first page when filters are applied
+  }, [provinceFilter, districtFilter, schoolTypeFilter, targetFilter, debouncedSearchQuery]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
 
   // ============================================
   // DATA FETCHING: Load provinces from external API (ONE source of truth)
@@ -228,12 +208,41 @@ export default function SchoolsPage() {
               return nameA.localeCompare(nameB);
             });
           setProvinces(validProvinces);
+          
+          // Auto-select first province for default data loading
+          if (validProvinces.length > 0 && !provinceFilter) {
+            const firstProvince = validProvinces[0];
+            setProvinceFilter(firstProvince.province_name);
+            // Auto-apply initial filters for default data loading
+            setAppliedFilters({
+              province: firstProvince.province_name,
+              district: "",
+              schoolType: "",
+              target: "",
+              searchQuery: "",
+            });
+            logger.info(`[SCHOOLS] Auto-selected first province: ${firstProvince.province_name}`, 'SCHOOLS');
+          }
         }
       } catch (error: any) {
         logger.error('[SCHOOLS] Failed to fetch provinces, using fallback data', 'SCHOOLS', error);
         setProvinceApiError(true);
         // Use fallback provinces when API fails
         setProvinces(FALLBACK_PROVINCES);
+        
+        // Auto-select first fallback province for default data loading
+        if (FALLBACK_PROVINCES.length > 0 && !provinceFilter) {
+          setProvinceFilter(FALLBACK_PROVINCES[0].province_name);
+          // Auto-apply initial filters for default data loading
+          setAppliedFilters({
+            province: FALLBACK_PROVINCES[0].province_name,
+            district: "",
+            schoolType: "",
+            target: "",
+            searchQuery: "",
+          });
+          logger.info(`[SCHOOLS] Auto-selected first fallback province: ${FALLBACK_PROVINCES[0].province_name}`, 'SCHOOLS');
+        }
       }
     };
 
@@ -297,9 +306,25 @@ export default function SchoolsPage() {
         }));
 
         setDistricts(districtData);
-        setDistrictFilter(""); // Clear district selection when province changes
-        setSchools([]); // Clear schools when province changes
-        setTotal(0);
+        
+        // Auto-select first district for default data loading (only if no district is currently selected)
+        if (districtData.length > 0 && !districtFilter) {
+          const firstDistrict = districtData[0];
+          setDistrictFilter(firstDistrict.district_name);
+          // Auto-apply district filter for default data loading
+          setAppliedFilters(prev => ({
+            ...prev,
+            district: firstDistrict.district_name,
+          }));
+          logger.info(`[SCHOOLS] Auto-selected first district: ${firstDistrict.district_name}`, 'SCHOOLS');
+        } else if (districtData.length === 0) {
+          // Clear district selection if no districts available
+          setDistrictFilter("");
+          setAppliedFilters(prev => ({
+            ...prev,
+            district: "",
+          }));
+        }
         
         logger.info(`[SCHOOLS] Loaded ${districtData.length} districts for province ${province_id}`, 'SCHOOLS');
       } catch (error: any) {
@@ -318,35 +343,37 @@ export default function SchoolsPage() {
   // ============================================
 
   const fetchSchools = useCallback(async () => {
-    // Do not call API unless BOTH province_id AND district_name are present
-    if (!debouncedFilters.province || !debouncedFilters.province.trim()) {
-      logger.info('[SCHOOLS] Skipping API call: province filter missing', 'SCHOOLS');
-      setSchools([]);
-      setTotal(0);
-      setLoading(false);
-      return;
+    // PERFORMANCE OPTIMIZATION: Cache-first strategy for schools
+    // Build cache key from applied filters
+    const cacheKey = `schools:${appliedFilters.province || 'all'}:${appliedFilters.district || 'all'}:${appliedFilters.searchQuery || ''}`;
+    
+    // Check cache first (only if no search query to avoid stale results)
+    if (!appliedFilters.searchQuery) {
+      const cachedSchools = dataCache.get<School[]>(cacheKey);
+      if (cachedSchools && Array.isArray(cachedSchools) && cachedSchools.length >= 0) {
+        logger.info(`[SCHOOLS] Cache hit: Using cached schools (${cachedSchools.length} schools)`, 'SCHOOLS');
+        setSchools(cachedSchools);
+        setTotal(cachedSchools.length);
+        setLoading(false);
+        return;
+      }
     }
-
-    if (!debouncedFilters.district || !debouncedFilters.district.trim()) {
-      logger.info('[SCHOOLS] Skipping API call: district filter missing', 'SCHOOLS');
-      setSchools([]);
-      setTotal(0);
-      setLoading(false);
-      return;
+    
+    // Progressive filtering: Fetch schools even without filters
+    // If filters are provided, use filtered endpoint; otherwise fetch all schools
+    
+    // Convert province name to province_id if province filter is provided
+    let province_id: string | undefined;
+    if (appliedFilters.province && appliedFilters.province.trim()) {
+      const province = provinces.find(p => p.province_name === appliedFilters.province);
+      if (province) {
+        province_id = province.province_id;
+      } else {
+        logger.warn(`[SCHOOLS] Province not found: ${appliedFilters.province}`, 'SCHOOLS');
+      }
     }
-
-    // Convert province name to province_id
-    const province = provinces.find(p => p.province_name === debouncedFilters.province);
-    if (!province) {
-      logger.warn(`[SCHOOLS] Province not found: ${debouncedFilters.province}`, 'SCHOOLS');
-      setSchools([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
-
-    const province_id = province.province_id;
-    const district_name = debouncedFilters.district.trim();
+    
+    const district_name = appliedFilters.district?.trim() || undefined;
 
     // Cancel previous request if still pending
     if (abortControllerRef.current) {
@@ -371,24 +398,57 @@ export default function SchoolsPage() {
         return;
       }
       
-      // Build params with REQUIRED filters
-      const params = new URLSearchParams();
-      params.append('province_id', province_id);
-      params.append('district_name', district_name);
+      let response: Response;
       
-      // Add optional filters
-      if (debouncedSearchQuery && debouncedSearchQuery.trim()) {
-        params.append('q', debouncedSearchQuery.trim());
-      }
+      // PERFORMANCE: Use search endpoint only when both province and district are provided
+      // Otherwise use list endpoint which is more efficient for partial filters
+      if (province_id && district_name) {
+        // Both filters provided - use filtered search endpoint
+        const params = new URLSearchParams();
+        params.append('province_id', province_id);
+        params.append('district_name', district_name);
+        
+        // Add optional search query
+        if (appliedFilters.searchQuery && appliedFilters.searchQuery.trim()) {
+          params.append('q', appliedFilters.searchQuery.trim());
+        }
 
-      const response = await fetch(`/api/schools/search?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        signal: abortController.signal,
-        cache: 'no-store', // Ensure fresh data
-      });
+        response = await fetch(`/api/schools/search?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: abortController.signal,
+          cache: 'no-store',
+        });
+      } else {
+        // No filters or partial filters - use list endpoint (more efficient)
+        const params = new URLSearchParams();
+        params.append('limit', '1000'); // Fetch a reasonable number
+        params.append('offset', '0');
+        
+        // Use the list endpoint which supports optional filters
+        if (province_id) {
+          params.append('province_id', province_id);
+        }
+        if (district_name) {
+          params.append('district_name', district_name);
+        }
+        if (appliedFilters.searchQuery && appliedFilters.searchQuery.trim()) {
+          params.append('q', appliedFilters.searchQuery.trim());
+        }
+        
+        const url = `/api/schools/list?${params.toString()}`;
+
+        response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: abortController.signal,
+          cache: 'no-store',
+        });
+      }
 
       if (!response.ok) {
         // Handle 401 authentication errors - redirect to login
@@ -459,6 +519,12 @@ export default function SchoolsPage() {
       if (!abortController.signal.aborted) {
         setSchools(fetchedSchools);
         setTotal(data.count || fetchedSchools.length);
+        
+        // PERFORMANCE: Cache schools data (only if no search query to avoid stale results)
+        if (!appliedFilters.searchQuery && fetchedSchools.length > 0) {
+          dataCache.set(cacheKey, fetchedSchools, 10 * 60 * 1000); // 10 minutes TTL
+          logger.info(`[SCHOOLS] Cached ${fetchedSchools.length} schools for 10 minutes`, 'SCHOOLS');
+        }
       }
     } catch (error: any) {
       // Ignore abort errors (cancelled requests)
@@ -486,22 +552,25 @@ export default function SchoolsPage() {
         setLoading(false);
       }
     }
-  }, [debouncedSearchQuery, debouncedFilters, provinces]);
+  }, [appliedFilters, provinces]);
 
-  // NO auto-search on page load - only fetch when BOTH province AND district are selected
+  // Fetch schools when:
+  // 1. Component mounts (initial data load - even with empty filters)
+  // 2. Applied filters change (when "Apply Filters" button is clicked or auto-selected)
+  // This ensures data always loads and updates when filters are applied
   useEffect(() => {
     if (!mounted) return;
     
-    // Only call API if BOTH filters are present
-    if (debouncedFilters.province && debouncedFilters.province.trim() && 
-        debouncedFilters.district && debouncedFilters.district.trim()) {
-      fetchSchools();
-    } else {
-      // Clear schools if filters are missing
-      setSchools([]);
-      setTotal(0);
-      setLoading(false);
+    // Wait for provinces to load if we need to convert province name to province_id
+    // But if no province filter is applied, we can fetch immediately (all schools)
+    if (appliedFilters.province && provinces.length === 0) {
+      // Wait for provinces to load so we can convert province name to province_id
+      return;
     }
+    
+    // Fetch schools with applied filters (handles empty filters - shows all schools)
+    fetchSchools();
+    hasInitialLoadRef.current = true;
 
     // Cleanup: abort request if component unmount or dependencies change
     return () => {
@@ -510,8 +579,27 @@ export default function SchoolsPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, debouncedFilters.province, debouncedFilters.district, debouncedSearchQuery]);
-
+  }, [mounted, appliedFilters.province, appliedFilters.district, appliedFilters.schoolType, appliedFilters.target, appliedFilters.searchQuery, provinces.length]);
+  
+  // Ensure initial data load happens even if appliedFilters starts empty
+  // This is a fallback to ensure data loads on page load
+  useEffect(() => {
+    if (!mounted || hasInitialLoadRef.current) return;
+    
+    // If we haven't loaded data yet and provinces are loaded (or not needed), fetch schools
+    if (!appliedFilters.province || provinces.length > 0) {
+      // Small delay to ensure other useEffects have run first
+      const timer = setTimeout(() => {
+        if (!hasInitialLoadRef.current) {
+          fetchSchools();
+          hasInitialLoadRef.current = true;
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, provinces.length]);
 
   // Fetch total students count from 25 provinces
   useEffect(() => {
@@ -632,31 +720,42 @@ export default function SchoolsPage() {
     return false;
   }, []);
 
-  // Client-side filtering - filter schools from API based on additional filters
-  // NOTE: Province and district filters are already applied at the API level (required parameters)
-  // Only apply additional client-side filters here (search query, school type, target status)
+  // Client-side filtering - Apply filters from appliedFilters (not pending filters)
+  // This ensures only applied filters affect the displayed data
   const filteredSchools = useMemo(() => {
-    // Use schools from API as source data (already filtered by province and district)
+    // Use schools from API as source data
     const sourceData = schools;
     let filtered = [...sourceData];
     
-    // Apply search filter (school name)
-    if (debouncedSearchQuery) {
-      const query = debouncedSearchQuery.toLowerCase().trim();
+    // Apply province filter (client-side if not already filtered by API)
+    if (appliedFilters.province && appliedFilters.province.trim()) {
+      filtered = filtered.filter(s => {
+        const provinceName = (s.province_name || '').toString();
+        return provinceName === appliedFilters.province;
+      });
+    }
+    
+    // Apply district filter (client-side if not already filtered by API)
+    if (appliedFilters.district && appliedFilters.district.trim()) {
+      filtered = filtered.filter(s => {
+        const districtName = (s.district_name || '').toString();
+        return districtName === appliedFilters.district;
+      });
+    }
+    
+    // Apply search filter (school name) - always client-side
+    if (appliedFilters.searchQuery) {
+      const query = appliedFilters.searchQuery.toLowerCase().trim();
       filtered = filtered.filter(s => {
         const name = (s.school_name || '').toLowerCase();
         return name.includes(query);
       });
     }
     
-    // NOTE: Province and district filters are NOT applied here because:
-    // 1. They are required API parameters (already filtered at API level)
-    // 2. Re-applying them here would cause incorrect filtering if field values don't match exactly
-    
     // Apply school type filter - exact match with school_type_h
     // The dropdown shows school_type_h values, so we match exactly
-    if (debouncedFilters.schoolType) {
-      const filterType = debouncedFilters.schoolType.trim();
+    if (appliedFilters.schoolType) {
+      const filterType = appliedFilters.schoolType.trim();
       filtered = filtered.filter(s => {
         const typeH = (s.school_type_h || '').toString();
         // Exact match with school_type_h (case-sensitive match with the dropdown values)
@@ -665,8 +764,8 @@ export default function SchoolsPage() {
     }
     
     // Apply target filter
-    if (debouncedFilters.target) {
-      const isTarget = debouncedFilters.target === 'true' || debouncedFilters.target === '1';
+    if (appliedFilters.target) {
+      const isTarget = appliedFilters.target === 'true' || appliedFilters.target === '1';
       filtered = filtered.filter(s => {
         const schoolIsTarget = isTargetSchool(s);
         return isTarget ? schoolIsTarget : !schoolIsTarget;
@@ -674,7 +773,7 @@ export default function SchoolsPage() {
     }
     
     return filtered;
-  }, [schools, debouncedFilters, debouncedSearchQuery, isTargetSchool]);
+  }, [schools, appliedFilters, isTargetSchool]);
 
   const paginatedSchools = useMemo(
     () => filteredSchools.slice((page - 1) * perPage, page * perPage),
@@ -912,7 +1011,54 @@ export default function SchoolsPage() {
                 <option value="false" className={language === 'km' ? 'font-khmer' : ''}>{t.schools?.nonTargetSchools || 'Non-Target Schools'}</option>
               </select>
             </div>
+
+            {/* Apply Filters Button - Performance Optimization */}
+            <div className="space-y-2 flex items-end">
+              <Button
+                onClick={handleApplyFilters}
+                disabled={loading || !hasPendingFilters}
+                className={`w-full h-[42px] ${language === 'km' ? 'font-khmer' : ''}`}
+                variant={hasPendingFilters ? "default" : "outline"}
+              >
+                {loading ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {language === 'km' ? 'កំពុងអនុវត្ត...' : 'Applying...'}
+                  </span>
+                ) : (
+                  <>
+                    {hasPendingFilters && (
+                      <span className="relative flex h-2 w-2 mr-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                      </span>
+                    )}
+                    {language === 'km' ? 'អនុវត្តតម្រង' : 'Apply Filters'}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
+
+          {/* Pending Filters Indicator */}
+          {hasPendingFilters && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+              <div className="flex items-center">
+                <svg className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <p className={`text-sm text-blue-800 dark:text-blue-200 ${language === 'km' ? 'font-khmer' : ''}`}>
+                  {language === 'km' 
+                    ? 'មានការផ្លាស់ប្តូរតម្រងដែលមិនទាន់បានអនុវត្ត។ ចុច "អនុវត្តតម្រង" ដើម្បីអាប់ដេតទិន្នន័យ។'
+                    : 'You have pending filter changes. Click "Apply Filters" to update the data.'
+                  }
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1007,10 +1153,7 @@ export default function SchoolsPage() {
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <p className={language === 'km' ? 'font-khmer' : ''}>
-                {provinceFilter && districtFilter ? 
-                  (t.common?.noData || 'No data found') : 
-                  (language === 'km' ? 'សូមជ្រើសរើសខេត្ត និងស្រុកដើម្បីមើលសាលា' : 'Please select a province and district to view schools')
-                }
+                {t.common?.noData || 'No data found'}
               </p>
             </div>
           )}

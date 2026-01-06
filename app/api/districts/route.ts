@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiClient, EXTERNAL_ENDPOINTS } from '@/lib/api/client';
 import { logger } from '@/lib/logger';
 import { dataCache } from '@/lib/cache/dataCache';
+import { DISTRICT_CACHE_TTL } from '@/lib/cache/cacheConstants';
 
 /**
  * Districts API Route
@@ -42,13 +43,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Build cache key (only cache successful responses, including empty arrays)
+    // STRICT CACHE-FIRST STRATEGY: Check cache BEFORE making slow external API call
+    // Districts API is extremely slow (20-30s), so cache-first is critical for performance
     const cacheKey = `districts:${province_id}:${district_name || 'all'}:${q || 'all'}`;
     
-    // Try to get from cache first
+    // Try to get from cache first - return immediately if found (prevents 20-30s wait)
     const cachedDistricts = dataCache.get<any[]>(cacheKey);
     if (cachedDistricts !== null && cachedDistricts !== undefined) {
-      logger.info(`[DISTRICTS] Using cached districts data (${cachedDistricts.length} districts)`, 'API/DISTRICTS');
+      logger.info(`[DISTRICTS] Cache hit (strict cache-first): returning ${cachedDistricts.length} districts immediately (saved 20-30s API call)`, 'API/DISTRICTS');
       
       // Apply pagination to cached data
       const totalCount = cachedDistricts.length;
@@ -66,9 +68,12 @@ export async function GET(request: NextRequest) {
         previous: offset > 0 ? `/api/districts?limit=${limit}&offset=${Math.max(0, offset - limit)}${province_id ? `&province_id=${province_id}` : ''}${q ? `&q=${q}` : ''}` : null,
       });
       
-      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+      // Long cache headers since districts rarely change
+      response.headers.set('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800'); // 24h fresh, 7d stale
       return response;
     }
+    
+    logger.info(`[DISTRICTS] Cache miss: will fetch from slow external API (may take 20-30s)`, 'API/DISTRICTS');
 
     // Build URL for District lookup API
     // Format: /api/Base/data/v1/api/lookup/v1/district/{province_id}/
@@ -136,10 +141,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Cache districts (including empty arrays) for 15 minutes
-    // This prevents repeated API calls for provinces with no districts
-    dataCache.set(cacheKey, filteredDistricts, 15 * 60 * 1000);
-    logger.info(`[DISTRICTS] Cached ${filteredDistricts.length} districts for 15 minutes`, 'API/DISTRICTS');
+    // Cache districts (including empty arrays) for 24 hours
+    // Districts rarely change, so long cache prevents repeated slow API calls (20-30s)
+    dataCache.set(cacheKey, filteredDistricts, DISTRICT_CACHE_TTL);
+    logger.info(`[DISTRICTS] Cached ${filteredDistricts.length} districts for 24 hours (prevents future 20-30s API calls)`, 'API/DISTRICTS');
 
     // Apply pagination if needed
     const totalCount = filteredDistricts.length;
@@ -159,8 +164,8 @@ export async function GET(request: NextRequest) {
       previous: offset > 0 ? `/api/districts?limit=${limit}&offset=${Math.max(0, offset - limit)}${province_id ? `&province_id=${province_id}` : ''}${q ? `&q=${q}` : ''}` : null,
     });
     
-    // Add cache headers for client-side caching (5 minutes)
-    httpResponse.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    // Long cache headers since districts rarely change (prevents slow API calls)
+    httpResponse.headers.set('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800'); // 24h fresh, 7d stale
     
     return httpResponse;
   } catch (error: any) {

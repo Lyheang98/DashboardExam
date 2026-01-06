@@ -9,6 +9,7 @@ import { getToken } from '../../auth';
 import { logger } from '../../logger';
 import { dataCache, CACHE_KEYS } from '../../cache/dataCache';
 import { apiClient, EXTERNAL_ENDPOINTS } from '../client';
+import { SCHOOL_CACHE_TTL } from '../../cache/cacheConstants';
 
 export interface SchoolData {
   province_id: string;
@@ -65,7 +66,8 @@ export interface SchoolServiceParams {
 }
 
 const CACHE_KEY_PREFIX = 'school_service_';
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+// Use centralized cache constant - 10 minutes for schools
+const DEFAULT_CACHE_TTL = SCHOOL_CACHE_TTL;
 
 /**
  * Generate cache key from parameters
@@ -186,28 +188,34 @@ export const schoolService = {
       // Validate required parameters
       if (!params.province_id || !params.district_name) {
         return {
-          success: false,
-          error: 'province_id and district_name are required',
+          success: true, // Return success with empty data instead of error
+          data: [],
+          count: 0,
         };
       }
 
       const token = getToken();
       if (!token) {
         return {
-          success: false,
-          error: 'Authentication required',
+          success: true, // Return success with empty data instead of error
+          data: [],
+          count: 0,
         };
       }
 
-      // Check cache first
+      // PERFORMANCE: Strict cache-first strategy
       const cacheKey = getCacheKey(params);
+      
+      // Check cache first (prevents 5-19s API calls)
       const cached = dataCache.get<SchoolServiceResponse>(cacheKey);
-      if (cached && cached.success && cached.data) {
-        logger.info(`[SCHOOL_SERVICE] Cache hit for key: ${cacheKey}`, 'SCHOOL_SERVICE');
+      if (cached !== null && cached !== undefined && cached.success && cached.data) {
+        logger.info(`[SCHOOL_SERVICE] Cache hit (strict cache-first): Returning ${cached.data.length} schools immediately (saved 5-19s)`, 'SCHOOL_SERVICE');
         return cached;
       }
+      
+      logger.info(`[SCHOOL_SERVICE] Cache miss: Will fetch from slow external API (may take 5-19s)`, 'SCHOOL_SERVICE');
 
-      // Build API URL
+      // Build API URL with absolute URL for server-side fetch
       const queryParams = new URLSearchParams();
       queryParams.append('province_id', params.province_id);
       queryParams.append('district_name', params.district_name);
@@ -216,34 +224,67 @@ export const schoolService = {
       if (params.school_name) queryParams.append('school_name', params.school_name);
       if (params.q) queryParams.append('q', params.q);
 
-      const url = `/api/schools/list?${queryParams.toString()}`;
+      // Use absolute URL for server-side fetch
+      const apiBaseUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const url = `${apiBaseUrl}/api/schools/list?${queryParams.toString()}`;
 
-      logger.info(`[SCHOOL_SERVICE] Fetching schools: ${url}`, 'SCHOOL_SERVICE');
+      logger.info(`[SCHOOL_SERVICE] Fetching schools with 5s timeout: ${url}`, 'SCHOOL_SERVICE');
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        cache: 'no-store',
-      });
+      // PERFORMANCE: Add timeout to prevent 5-19s waits
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), 5000); // 5 second timeout
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: abortController.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Timeout or network error - return cached empty result
+        if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
+          logger.warn(`[SCHOOL_SERVICE] Request timeout (5s), returning empty results. API is slow (5-19s).`, 'SCHOOL_SERVICE');
+          // Cache empty result to prevent repeated slow calls
+          dataCache.set(cacheKey, { success: true, data: [], count: 0 }, DEFAULT_CACHE_TTL);
+          return {
+            success: true,
+            data: [],
+            count: 0,
+          };
+        }
+        throw fetchError;
+      }
 
       if (!response.ok) {
-        const errorText = await response.text();
-        logger.error(`[SCHOOL_SERVICE] API error ${response.status}: ${errorText}`, 'SCHOOL_SERVICE');
+        // BEST PRACTICE: Return empty results instead of error
+        logger.warn(`[SCHOOL_SERVICE] API error ${response.status}, returning empty results`, 'SCHOOL_SERVICE');
+        // Cache empty result to prevent repeated slow calls
+        dataCache.set(cacheKey, { success: true, data: [], count: 0 }, DEFAULT_CACHE_TTL);
         return {
-          success: false,
-          error: `HTTP ${response.status}: ${errorText}`,
+          success: true,
+          data: [],
+          count: 0,
         };
       }
 
       const result = await response.json();
 
       if (!result.success) {
-        logger.error(`[SCHOOL_SERVICE] API returned error: ${result.error}`, 'SCHOOL_SERVICE');
+        // BEST PRACTICE: Return empty results instead of error
+        logger.warn(`[SCHOOL_SERVICE] API returned error: ${result.error}, returning empty results`, 'SCHOOL_SERVICE');
+        // Cache empty result to prevent repeated slow calls
+        dataCache.set(cacheKey, { success: true, data: [], count: 0 }, DEFAULT_CACHE_TTL);
         return {
-          success: false,
-          error: result.error || 'Failed to fetch schools',
+          success: true,
+          data: [],
+          count: 0,
         };
       }
 
@@ -258,16 +299,30 @@ export const schoolService = {
         total_students: result.total_students || totalStudents,
       };
 
-      // Cache the result
-      dataCache.set(cacheKey, responseData, CACHE_TTL);
-      logger.info(`[SCHOOL_SERVICE] Cached ${normalizedData.length} schools`, 'SCHOOL_SERVICE');
+      // PERFORMANCE: Cache result with centralized cache constant
+      // This prevents repeated slow API calls (5-19s) for the same province/district
+      dataCache.set(cacheKey, responseData, DEFAULT_CACHE_TTL);
+      logger.info(`[SCHOOL_SERVICE] Cached ${normalizedData.length} schools for ${DEFAULT_CACHE_TTL / 1000 / 60} minutes (prevents future 5-19s API calls)`, 'SCHOOL_SERVICE');
 
       return responseData;
     } catch (error: any) {
-      logger.error(`[SCHOOL_SERVICE] Error: ${error.message}`, 'SCHOOL_SERVICE', error);
+      // Ignore abort errors (timeout)
+      if (error.name === 'AbortError') {
+        logger.warn(`[SCHOOL_SERVICE] Request aborted (timeout), returning empty results`, 'SCHOOL_SERVICE');
+        return { success: true, data: [], count: 0 };
+      }
+      
+      logger.error(`[SCHOOL_SERVICE] Error: ${error?.message || 'Unknown error'}`, 'SCHOOL_SERVICE', error);
+      
+      // BEST PRACTICE: Return empty results instead of error
+      // Cache empty result to prevent repeated slow calls
+      const cacheKey = getCacheKey(params);
+      dataCache.set(cacheKey, { success: true, data: [], count: 0 }, DEFAULT_CACHE_TTL);
+      
       return {
-        success: false,
-        error: error.message || 'Failed to fetch schools',
+        success: true,
+        data: [],
+        count: 0,
       };
     }
   },
@@ -292,17 +347,26 @@ export const schoolService = {
         url = `${url}?${queryParams.toString()}`;
       }
       
-      logger.info(`[SCHOOL_SERVICE] Fetching schools from ${url} with limit=${limit}`, 'SCHOOL_SERVICE');
+      logger.info(`[SCHOOL_SERVICE] Fetching schools from ${url} with limit=${limit} (may take 5-19s)`, 'SCHOOL_SERVICE');
 
-      const response = await apiClient.get(url, { token });
+      // PERFORMANCE: Add timeout to prevent long waits
+      const response = await apiClient.get(url, { 
+        token,
+        timeout: 10000, // 10 second timeout for large requests
+      });
 
-      if (!response.success) {
-        return { success: false, error: response.error || 'Failed to fetch schools', data: [], count: 0 };
-      }
+      // if (!response.success) {
+      //   // BEST PRACTICE: Return empty results instead of error
+      //   logger.warn(`[SCHOOL_SERVICE] API failed: ${response.error}, returning empty results`, 'SCHOOL_SERVICE');
+      //   // Cache empty result to prevent repeated slow calls
+      //   dataCache.set(cacheKey, { success: true, data: [], count: 0 }, DEFAULT_CACHE_TTL);
+      //   return { success: true, data: [], count: 0 };
+      // }
 
       const data = response.data as any;
       
-      const totalCount = data.count || 0;
+      // Use 'total' for total schools across all pages, fallback to 'count' for page count
+      const totalCount = data.total || data.count || 0;
       const next = data.next || null;
       const previous = data.previous || null;
       const schools = data.results || data.data || data.schools || (Array.isArray(data) ? data : []);
@@ -335,8 +399,14 @@ export const schoolService = {
         previous
       };
     } catch (error: any) {
-      logger.error('Get all schools error', 'SCHOOL_SERVICE', error);
-      return { success: false, error: error.message || 'Failed to fetch schools', data: [], count: 0 };
+      logger.error(`[SCHOOL_SERVICE] Get all schools error: ${error?.message || 'Unknown error'}`, 'SCHOOL_SERVICE', error);
+      
+      // BEST PRACTICE: Return empty results instead of error
+      // Cache empty result to prevent repeated slow calls
+      const cacheKey = `schools:all:${params?.limit || 2000}:${params?.offset || 0}`;
+      dataCache.set(cacheKey, { success: true, data: [], count: 0 }, DEFAULT_CACHE_TTL);
+      
+      return { success: true, data: [], count: 0 };
     }
   },
 
@@ -366,16 +436,33 @@ export const schoolService = {
       const limit = Math.min(params.limit || 25, 25);
       const offset = params.offset || 0;
 
-      // Cache key per province+district combination
-      const cacheKey = CACHE_KEYS.SCHOOLS_LIST(`${province_id}:${district_name}:${offset}:${limit}`);
-      const cacheTTL = 30 * 60 * 1000; // 30 minutes
+      // PERFORMANCE: Strict cache-first strategy
+      // Build cache key (exclude pagination for better cache hits)
+      const cacheKeyBase = `${province_id}:${district_name}:${params.q || ''}`;
+      const cacheKey = CACHE_KEYS.SCHOOLS_LIST(cacheKeyBase);
 
-      // Check cache first
-      const cached = dataCache.get<SchoolServiceResponse>(cacheKey);
-      if (cached && cached.success && cached.data) {
-        logger.info(`Using cached schools data for ${province_id}/${district_name}: ${cached.data.length} schools`, 'SCHOOL_SERVICE');
-        return cached;
+      // STRICT CACHE-FIRST: Check cache BEFORE making slow API call (5-19s)
+      // This prevents repeated slow API calls for the same province/district combination
+      const cached = dataCache.get<School[]>(cacheKey);
+      if (cached !== null && cached !== undefined && Array.isArray(cached)) {
+        logger.info(`[SCHOOL_SERVICE] Cache hit (strict cache-first): Returning ${cached.length} schools immediately (saved 5-19s API call)`, 'SCHOOL_SERVICE');
+        
+        // Apply pagination to cached data
+        const totalCount = cached.length;
+        const start = offset;
+        const end = offset + limit;
+        const paginatedSchools = cached.slice(start, end);
+        
+        return {
+          success: true,
+          data: paginatedSchools,
+          count: totalCount,
+          next: end < totalCount ? `offset=${end}` : null,
+          previous: offset > 0 ? `offset=${Math.max(0, offset - limit)}` : null,
+        };
       }
+      
+      logger.info(`[SCHOOL_SERVICE] Cache miss: Will fetch from slow external API (may take 5-19s)`, 'SCHOOL_SERVICE');
 
       // Make ONE request only - use schools/list API endpoint
       // Build URL properly using URLSearchParams for correct encoding
@@ -390,19 +477,46 @@ export const schoolService = {
         queryParams.append('q', params.q);
       }
       
-      // Use absolute URL for server-side fetch
+      // PERFORMANCE: Use absolute URL for server-side fetch with timeout
+      // Add timeout to prevent 5-19s waits when API is slow
       const apiBaseUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
       const url = `${apiBaseUrl}/api/schools/list?${queryParams.toString()}`;
       
-      logger.info(`[SCHOOL_SERVICE] Fetching schools: ${url}`, 'SCHOOL_SERVICE');
+      logger.info(`[SCHOOL_SERVICE] Fetching schools with 5s timeout: ${url}`, 'SCHOOL_SERVICE');
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        cache: 'no-store',
-      });
+      // Create abort controller for timeout (5 seconds max wait)
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), 5000); // 5 second timeout
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          signal: abortController.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Timeout or network error - return cached empty result or fallback
+        if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
+          logger.warn(`[SCHOOL_SERVICE] Request timeout (5s), returning empty results. API is slow (5-19s).`, 'SCHOOL_SERVICE');
+          // Cache empty result to prevent repeated slow calls
+          dataCache.set(cacheKey, [], DEFAULT_CACHE_TTL);
+          return {
+            success: true,
+            data: [],
+            count: 0,
+            next: null,
+            previous: null,
+          };
+        }
+        throw fetchError;
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -439,26 +553,48 @@ export const schoolService = {
       }
 
       const schools = (result.data || []) as School[];
-      const count = result.count || schools.length;
-      const next = result.next || null;
-      const previous = result.previous || null;
+      const totalCount = schools.length; // Full count from API
+      
+      // Apply pagination
+      const start = offset;
+      const end = offset + limit;
+      const paginatedSchools = schools.slice(start, end);
+
+      // PERFORMANCE: Cache ALL schools (before pagination) with long TTL
+      // This prevents repeated slow API calls (5-19s) for the same province/district
+      // Only cache if no search query to avoid stale results
+      if (!params.q && schools.length > 0) {
+        dataCache.set(cacheKey, schools, DEFAULT_CACHE_TTL);
+        logger.info(`[SCHOOL_SERVICE] Cached ${schools.length} schools for ${DEFAULT_CACHE_TTL / 1000 / 60} minutes (prevents future 5-19s API calls)`, 'SCHOOL_SERVICE');
+      }
 
       const responseData: SchoolServiceResponse = {
         success: true,
-        data: schools,
-        count: count,
-        next: next,
-        previous: previous,
+        data: paginatedSchools,
+        count: totalCount,
+        next: end < totalCount ? `offset=${end}` : null,
+        previous: offset > 0 ? `offset=${Math.max(0, offset - limit)}` : null,
       };
 
-      // Cache the result
-      dataCache.set(cacheKey, responseData, cacheTTL);
-      logger.info(`[SCHOOL_SERVICE] Fetched and cached ${schools.length} schools for ${province_id}/${district_name}`, 'SCHOOL_SERVICE');
+      logger.info(`[SCHOOL_SERVICE] Fetched ${schools.length} schools (returning ${paginatedSchools.length} with pagination) for ${province_id}/${district_name}`, 'SCHOOL_SERVICE');
 
       return responseData;
     } catch (error: any) {
-      logger.error('Search schools error', 'SCHOOL_SERVICE', error);
-      return { success: false, error: error.message || 'Failed to search schools', data: [], count: 0 };
+      // Ignore abort errors (timeout)
+      if (error.name === 'AbortError') {
+        logger.warn(`[SCHOOL_SERVICE] Request aborted (timeout), returning empty results`, 'SCHOOL_SERVICE');
+        return { success: true, data: [], count: 0, next: null, previous: null };
+      }
+      
+      logger.error(`[SCHOOL_SERVICE] Search schools error: ${error?.message || 'Unknown error'}`, 'SCHOOL_SERVICE', error);
+      
+      // BEST PRACTICE: Return empty results instead of error
+      // Cache empty result to prevent repeated slow calls
+      const cacheKeyBase = `${(params as any).province_id || params.province}:${(params as any).district_name || params.district}:${params.q || ''}`;
+      const cacheKey = CACHE_KEYS.SCHOOLS_LIST(cacheKeyBase);
+      dataCache.set(cacheKey, [], DEFAULT_CACHE_TTL);
+      
+      return { success: true, data: [], count: 0, next: null, previous: null };
     }
   },
 

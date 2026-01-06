@@ -103,6 +103,7 @@ function getDefaultMonthYear(): { month: number; year: number } {
     year: now.getFullYear()
   };
 }
+// 009 768 459
 
 function normalizeParams(params: ResultSubjectsParams): ResultSubjectsParams & {
   provinceId?: string;
@@ -182,42 +183,49 @@ function buildMonthlyEndpoint(params: ResultSubjectsParams & {
 function buildHierarchicalEndpoint(params: ResultSubjectsParams): string {
   const { provinceName, districtName, geipSchoolId, gradeName, room } = params;
 
+  // Sanitize inputs - trim and filter empty strings
+  const sanitizedProvinceName = provinceName?.trim();
+  const sanitizedDistrictName = districtName?.trim();
+  const sanitizedGeipSchoolId = geipSchoolId?.trim();
+  const sanitizedGradeName = gradeName?.trim();
+  const sanitizedRoom = room?.trim();
+
   // Standard hierarchical endpoints (ONLY for non-analytics pages)
   // NOTE: These endpoints should NOT be used for Leaderboard or Student Tracker
-  if (provinceName && districtName && geipSchoolId && gradeName && room) {
+  if (sanitizedProvinceName && sanitizedDistrictName && sanitizedGeipSchoolId && sanitizedGradeName && sanitizedRoom) {
     // Deepest: All filters available - use BY_ROOM
     logger.info(`[${LOG_CONTEXT}] Using deepest endpoint: BY_ROOM`, LOG_CONTEXT);
     return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_ROOM(
-      provinceName, districtName, geipSchoolId, gradeName, room
+      sanitizedProvinceName, sanitizedDistrictName, sanitizedGeipSchoolId, sanitizedGradeName, sanitizedRoom
     );
   }
   
-  if (provinceName && districtName && geipSchoolId && gradeName) {
+  if (sanitizedProvinceName && sanitizedDistrictName && sanitizedGeipSchoolId && sanitizedGradeName) {
     // Deep: School + Grade - use BY_GRADE
     logger.info(`[${LOG_CONTEXT}] Using deep endpoint: BY_GRADE`, LOG_CONTEXT);
     return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_GRADE(
-      provinceName, districtName, geipSchoolId, gradeName
+      sanitizedProvinceName, sanitizedDistrictName, sanitizedGeipSchoolId, sanitizedGradeName
     );
   }
   
-  if (provinceName && districtName && geipSchoolId) {
+  if (sanitizedProvinceName && sanitizedDistrictName && sanitizedGeipSchoolId) {
     // Medium: School only - use BY_SCHOOL
     logger.info(`[${LOG_CONTEXT}] Using medium endpoint: BY_SCHOOL`, LOG_CONTEXT);
     return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_SCHOOL(
-      provinceName, districtName, geipSchoolId
+      sanitizedProvinceName, sanitizedDistrictName, sanitizedGeipSchoolId
     );
   }
   
-  if (provinceName && districtName) {
+  if (sanitizedProvinceName && sanitizedDistrictName) {
     // Medium: District only - use BY_DISTRICT
     logger.info(`[${LOG_CONTEXT}] Using medium endpoint: BY_DISTRICT`, LOG_CONTEXT);
-    return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_DISTRICT(provinceName, districtName);
+    return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_DISTRICT(sanitizedProvinceName, sanitizedDistrictName);
   }
   
-  if (provinceName) {
+  if (sanitizedProvinceName) {
     // Shallow: Province only - use BY_PROVINCE
     logger.info(`[${LOG_CONTEXT}] Using shallow endpoint: BY_PROVINCE`, LOG_CONTEXT);
-    return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_PROVINCE(provinceName);
+    return EXTERNAL_ENDPOINTS.RESULT_SUBJECTS.BY_PROVINCE(sanitizedProvinceName);
   }
   
   // Base endpoint (no filters)

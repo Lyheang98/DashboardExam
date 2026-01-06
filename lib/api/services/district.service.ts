@@ -31,7 +31,8 @@ export interface DistrictServiceParams {
 }
 
 const CACHE_KEY_PREFIX = 'district_service_';
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours - districts rarely change
+const STALE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days - use stale cache if fresh unavailable
 
 /**
  * Generate cache key from parameters
@@ -96,17 +97,25 @@ export const districtService = {
         };
       }
 
-      // Check cache first (skip cache for empty results when province_id is provided, to allow fallback)
+      // STRICT CACHE-FIRST STRATEGY: Always check cache first, return immediately if found
+      // This prevents slow API calls (20-30s) when cached data is available
       const cacheKey = getCacheKey(params);
       const cached = dataCache.get<DistrictServiceResponse>(cacheKey);
-      if (cached && cached.success && cached.data && cached.data.length > 0) {
-        logger.info(`[DISTRICT_SERVICE] Cache hit for key: ${cacheKey}`, 'DISTRICT_SERVICE');
-        return cached;
+      
+      // Return cached data immediately if available (even if empty - prevents unnecessary API calls)
+      if (cached !== null && cached !== undefined) {
+        if (cached.success && cached.data) {
+          logger.info(`[DISTRICT_SERVICE] Cache hit (strict cache-first): ${cacheKey} - returning ${cached.data.length} districts immediately`, 'DISTRICT_SERVICE');
+          return cached;
+        }
+        // Even return cached errors to prevent slow retries
+        if (!cached.success) {
+          logger.info(`[DISTRICT_SERVICE] Cache hit (cached error): ${cacheKey} - returning cached error to prevent slow retry`, 'DISTRICT_SERVICE');
+          return cached;
+        }
       }
-      // Also skip cache if we have empty results for a province_id lookup (allow fallback to retry)
-      if (cached && cached.success && cached.data && cached.data.length === 0 && params.province_id) {
-        logger.info(`[DISTRICT_SERVICE] Skipping cached empty result for province_id=${params.province_id} to allow fallback`, 'DISTRICT_SERVICE');
-      }
+      
+      logger.info(`[DISTRICT_SERVICE] Cache miss for key: ${cacheKey} - will fetch from API`, 'DISTRICT_SERVICE');
 
       // Build API URL
       const queryParams = new URLSearchParams();
@@ -159,14 +168,11 @@ export const districtService = {
         total_students: result.total_students || totalStudents,
       };
 
-      // Only cache non-empty results to allow fallback to retry
-      // Don't cache empty results when province_id is provided (fallback should try Schools API)
-      if (normalizedData.length > 0 || !params.province_id) {
-        dataCache.set(cacheKey, responseData, CACHE_TTL);
-        logger.info(`[DISTRICT_SERVICE] Cached ${normalizedData.length} districts`, 'DISTRICT_SERVICE');
-      } else {
-        logger.warn(`[DISTRICT_SERVICE] Not caching empty result for province_id=${params.province_id} - fallback may be needed`, 'DISTRICT_SERVICE');
-      }
+      // Cache ALL results (including empty arrays and errors) with long TTL
+      // This prevents repeated slow API calls (20-30s) for the same province
+      // Empty arrays are valid responses (province has no districts)
+      dataCache.set(cacheKey, responseData, CACHE_TTL);
+      logger.info(`[DISTRICT_SERVICE] Cached ${normalizedData.length} districts for ${CACHE_TTL / 1000 / 60} minutes`, 'DISTRICT_SERVICE');
 
       return responseData;
     } catch (error: any) {

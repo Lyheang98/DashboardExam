@@ -136,6 +136,13 @@ export default function DistrictPage() {
               return nameA.localeCompare(nameB);
             });
           setProvinces(validProvinces);
+          
+          // Auto-select first province for default data loading
+          if (validProvinces.length > 0 && !filters.provinceId) {
+            const firstProvince = validProvinces[0];
+            setProvinceId(firstProvince.province_id);
+            logger.info(`[DISTRICT] Auto-selected first province: ${firstProvince.province_name} (${firstProvince.province_id})`, 'DISTRICT');
+          }
         }
       } catch (error: any) {
         logger.error('Failed to fetch provinces', 'DISTRICT', error);
@@ -143,7 +150,7 @@ export default function DistrictPage() {
     };
 
     loadProvinces();
-  }, []);
+  }, [filters.provinceId, setProvinceId]);
 
   // ============================================
   // NORMALIZE API RESPONSE: Handle different response shapes
@@ -218,23 +225,49 @@ export default function DistrictPage() {
 
     const fetchDistricts = async () => {
       try {
-        // Check cache first
+        // STRICT CACHE-FIRST: Check cache BEFORE making slow API call
+        // Districts API is extremely slow (20-30s), so cache-first is critical
         const cacheKey = `districts:${currentProvinceId}`;
         const cachedDistricts = dataCache.get<DistrictData[]>(cacheKey);
         
-        // Only use cache if it contains valid data (not empty)
-        if (cachedDistricts && Array.isArray(cachedDistricts) && cachedDistricts.length > 0) {
-          logger.info(`[DISTRICT] Using cached districts for province: ${currentProvinceId} (${cachedDistricts.length} districts)`, 'DISTRICT');
+        // Return cached data immediately if available (even if empty - prevents 20-30s wait)
+        if (cachedDistricts !== null && cachedDistricts !== undefined && Array.isArray(cachedDistricts)) {
+          logger.info(`[DISTRICT] Cache hit (strict cache-first): Using cached districts for province: ${currentProvinceId} (${cachedDistricts.length} districts) - saved 20-30s`, 'DISTRICT');
           setAllDistricts(cachedDistricts);
           setTotalCount(cachedDistricts.length);
           setHasInitialFetch(true);
           setLoading(false);
-          setPage(1); // Reset to first page when province changes
+          setPage(1);
+          
+          // Optionally refresh in background (stale-while-revalidate pattern)
+          // But don't block UI - user sees cached data immediately
+          setTimeout(async () => {
+            try {
+              const refreshResult = await districtService.getAll({
+                province_id: currentProvinceId,
+                limit: 10000,
+                offset: 0,
+              });
+              if (refreshResult.success && refreshResult.data) {
+                const refreshedDistricts = normalizeDistrictResponse(refreshResult);
+                if (refreshedDistricts.length !== cachedDistricts.length) {
+                  // Only update if data actually changed
+                  logger.info(`[DISTRICT] Background refresh: Updated districts (${cachedDistricts.length} -> ${refreshedDistricts.length})`, 'DISTRICT');
+                  setAllDistricts(refreshedDistricts);
+                  setTotalCount(refreshedDistricts.length);
+                }
+              }
+            } catch (error) {
+              // Silently fail background refresh - cached data is already shown
+              logger.debug('[DISTRICT] Background refresh failed (non-critical)', 'DISTRICT');
+            }
+          }, 1000); // Refresh after 1s delay (non-blocking)
+          
           return;
         }
         
-        // Fetch districts for the selected province
-        logger.info(`[DISTRICT] Fetching districts for province: ${currentProvinceId}`, 'DISTRICT');
+        // Cache miss - fetch from API (this will be slow: 20-30s)
+        logger.info(`[DISTRICT] Cache miss: Fetching districts for province: ${currentProvinceId} (may take 20-30s)`, 'DISTRICT');
         
         const result = await districtService.getAll({
           province_id: currentProvinceId,
@@ -271,12 +304,11 @@ export default function DistrictPage() {
           return;
         }
 
-        // Only cache if we have valid data (not empty)
-        if (normalizedDistricts.length > 0) {
-          // Cache district results (30 minutes TTL)
-          dataCache.set(cacheKey, normalizedDistricts, 30 * 60 * 1000);
-          logger.info(`[DISTRICT] Cached ${normalizedDistricts.length} districts for province ${currentProvinceId}`, 'DISTRICT');
-        }
+        // Cache ALL results (including empty arrays) with long TTL
+        // Districts rarely change, so long cache prevents repeated slow API calls (20-30s)
+        const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+        dataCache.set(cacheKey, normalizedDistricts, CACHE_TTL);
+        logger.info(`[DISTRICT] Cached ${normalizedDistricts.length} districts for 24 hours (prevents future 20-30s API calls)`, 'DISTRICT');
 
         setAllDistricts(normalizedDistricts);
         setTotalCount(normalizedDistricts.length);
